@@ -1,6 +1,6 @@
-# ReJSON - a JSON data type for Redis
+# ValkeyJSON - a JSON data type for Valkey
 
-ReJSON is a [Redis](https://redis.io/) module that implements [ECMA-404 The JSON Data Interchange Standard](http://json.org/) as a native data type. It allows storing, updating and fetching JSON values from Redis keys (documents).
+ValkeyJSON is a [Valkey](https://valkey.io/) module that implements [ECMA-404 The JSON Data Interchange Standard](http://json.org/) as a native data type. It allows storing, updating and fetching JSON values from Valkey keys (documents).
 
 Primary features:
 
@@ -9,34 +9,32 @@ Primary features:
 * Documents are stored as binary data in a tree structure, allowing fast access to sub-elements
 * Typed atomic operations for all JSON values types
 
-The source code is available at: https://github.com/goodform/rejson
+The source code is available at: https://github.com/valkey-io/valkey-json
 
 ## Quickstart
 
-1.  [Launch ReJSON with Docker](#launch-rejson-with-docker)
-1.  [Use it from **any** Redis client](#using-rejson), e.g.:
+1.  [Launch ValkeyJSON with Docker](#launch-valkeyjson-with-docker)
+2.  [Use it from **any** Valkey client](#using-valkeyjson)
 
-![ReJSON with `redis-cli`](images/demo.gif)
-
-Alternatively, you can also build and load the module yourself. [Build and Load the ReJSON module library](#building-and-loading-the-module)
+Alternatively, you can also build and load the module yourself. [Build and Load the ValkeyJSON module library](#building-and-loading-the-module)
 
 
-## Launch ReJSON with Docker
+## Launch ValkeyJSON with Docker
 Run the following on Windows, MacOS or Linux with Docker.
 ```
-docker run -p 6379:6379 --name redis-rejson goodform/rejson:latest
+docker run -p 6379:6379 --name valkey-json valkey-io/valkey-json:latest
 ```
 
-## Using ReJSON
+## Using ValkeyJSON
 
-Before using ReJSON, you should familiarize yourself with its commands and syntax as detailed in the [commands reference](commands.md) document. However, to quickly get started just review this section and get:
+Before using ValkeyJSON, you should familiarize yourself with its commands and syntax as detailed in the [commands reference](commands.md) document. However, to quickly get started just review this section and get:
 
-1.  A Redis server running the module (see [building](#building-the-module-library) and [loading](#loading-the-module-to-Redis) for instructions)
-1.  Any [Redis](http://redis.io/clients) or [ReJSON client](#client-libraries)
+1.  A Valkey server running the module (see [building](#building-the-module-library) and [loading](#loading-the-module-to-Valkey) for instructions)
+2.  Any [Valkey](http://valkey.io/clients) or [ValkeyJSON client](#client-libraries)
 
-### With `redis-cli`
+### With `valkey-cli`
 
-This example will use [`redis-cli`](http://redis.io/topics/rediscli) as the Redis client. The first ReJSON command to try out is [`JSON.SET`](/commands#jsonset), which sets a Redis key with a JSON value. All JSON values can be used, for example a string:
+This example will use [`valkey-cli`](http://valkey.io/topics/valkeycli) as the Valkey client. The first ValkeyJSON command to try out is [`JSON.SET`](/commands#jsonset), which sets a Valkey key with a JSON value. All JSON values can be used, for example a string:
 
 ```
 127.0.0.1:6379> JSON.SET foo . '"bar"'
@@ -47,7 +45,7 @@ OK
 string
 ```
 
-[`JSON.GET`](commands.md#jsonget) and [`JSON.TYPE`](commands.md#jsontype) do literally that regardless of the value's type, but you should really check out `JSON.GET` prettifying powers. Note how the commands are given the period character, i.e. `.`. This is the [path](path.md) to the value in the ReJSON data type (in this case it just means the root). A couple more string operations:
+[`JSON.GET`](commands.md#jsonget) and [`JSON.TYPE`](commands.md#jsontype) do literally that regardless of the value's type, but you should really check out `JSON.GET` prettifying powers. Note how the commands are given the period character, i.e. `.`. This is the [path](path.md) to the value in the ValkeyJSON data type (in this case it just means the root). A couple more string operations:
 
 ```
 127.0.0.1:6379> JSON.STRLEN foo .
@@ -89,7 +87,7 @@ OK
 "[true,{\"answer\":42}]"
 ```
 
-The handy [`JSON.DEL`](/commands#jsondel) command deletes anything you tell it to. Arrays can be manipulated with a dedicated subset of ReJSON commands:
+The handy [`JSON.DEL`](/commands#jsondel) command deletes anything you tell it to. Arrays can be manipulated with a dedicated subset of ValkeyJSON commands:
 
 ```
 127.0.0.1:6379> JSON.SET arr . []
@@ -127,21 +125,21 @@ OK
 
 ### With any other client
 
-Unless your [Redis client](http://redis.io/clients) already supports Redis modules (unlikely) or ReJSON specifically (even more unlikely), you should be okay using its ability to send raw Redis commands. Depending on your client of choice, the exact method for doing that may vary.
+Unless your [Valkey client](http://valkey.io/clients) already supports Valkey modules (unlikely) or ValkeyJSON specifically (even more unlikely), you should be okay using its ability to send raw Valkey commands. Depending on your client of choice, the exact method for doing that may vary.
 
 #### Python example
 
-This code snippet shows how to use ReJSON with raw Redis commands from Python with [redis-py](https://github.com/andymccurdy/redis-py):
+This code snippet shows how to use ValkeyJSON with raw Valkey commands from Python with [valkey-py](https://github.com/andymccurdy/valkey-py):
 
 ```Python
-import redis
+import valkey
 import json
 
 data = {
     'foo': 'bar'
 }
 
-r = redis.StrictRedis()
+r = valkey.StrictValkey()
 r.execute_command('JSON.SET', 'doc', '.', json.dumps(data))
 reply = json.loads(r.execute_command('JSON.GET', 'doc'))
 ```
@@ -153,58 +151,45 @@ reply = json.loads(r.execute_command('JSON.GET', 'doc'))
 
 Requirements:
 
-* The ReJSON repository: `git clone https://github.com/RedisLabsModules/rejson.git`
+* The ValkeyJSON repository: `git clone https://github.com/valkey-io/valkey-json.git`
 * The `build-essential` package: `apt-get install build-essential`
 
 To build the module, run `make` in the project's directory.
 
-Congratulations! You can find the compiled module library at `src/rejson.so`.
+Congratulations! You can find the compiled module library at `src/valkeyjson.so`.
 
 ### MacOSX
 
 To build the module, run `make` in the project's directory.
 
-Congratulations! You can find the compiled module library at `src/rejson.so`.
+Congratulations! You can find the compiled module library at `src/valkeyjson.so`.
 
-### Loading the module to Redis
+### Loading the module to Valkey
 
 Requirements:
 
-* [Redis v4.0 or above](http://redis.io/download)
+* [Valkey v4.0 or above](http://valkey.io/download)
 
-We recommend you have Redis load the module during startup by adding the following to your `redis.conf` file:
+We recommend you have Valkey load the module during startup by adding the following to your `valkey.conf` file:
 
 ```
-loadmodule /path/to/module/rejson.so
+loadmodule /path/to/module/valkeyjson.so
 ```
 
-In the line above replace `/path/to/module/rejson.so` with the actual path to the module's library. Alternatively, you can have Redis load the module using the following command line argument syntax:
+In the line above replace `/path/to/module/valkeyjson.so` with the actual path to the module's library. Alternatively, you can have Valkey load the module using the following command line argument syntax:
 
 ```bash
-~/$ redis-server --loadmodule /path/to/module/rejson.so
+~/$ valkey-server --loadmodule /path/to/module/valkeyjson.so
 ```
 
-Lastly, you can also use the [`MODULE LOAD`](http://redis.io/commands/module-load) command. Note, however, that `MODULE LOAD` is a **dangerous command** and may be blocked/deprecated in the future due to security considerations.
+Lastly, you can also use the [`MODULE LOAD`](http://valkey.io/commands/module-load) command. Note, however, that `MODULE LOAD` is a **dangerous command** and may be blocked/deprecated in the future due to security considerations.
 
-Once the module has been loaded successfully, the Redis log should have lines similar to:
+Once the module has been loaded successfully, the Valkey log should have lines similar to:
 
 ```
 ...
-1877:M 23 Dec 02:02:59.725 # <ReJSON> JSON data type for Redis - v1.0.0 [encver 0]
-1877:M 23 Dec 02:02:59.725 * Module 'ReJSON' loaded from <redacted>/src/rejson.so
+1877:M 23 Dec 02:02:59.725 # <ValkeyJSON> JSON data type for Valkey - v1.0.0 [encver 0]
+1877:M 23 Dec 02:02:59.725 * Module 'ValkeyJSON' loaded from <redacted>/src/valkeyjson.so
 ...
 ```
 
-
-### Client libraries
-
-Some languages have client libraries that provide support for ReJSON's commands:
-
-| Project | Language | License | Author | URL |
-| ------- | -------- | ------- | ------ | --- |
-| iorejson | Node.js | MIT | [Evan Huang @evanhuang8](https://github.com/evanhuang8) | [git](https://github.com/evanhuang8/iorejson) [npm](https://www.npmjs.com/package/iorejson) |
-| node_redis-rejson | Node.js | MIT | [Kyle Davis @stockholmux](https://github.com/stockholmux) | [git](https://github.com/stockholmux/node_redis-rejson) [npm](https://www.npmjs.com/package/redis-rejson) |
-| JReJSON | Java | BSD-2-Clause | [Redis Labs](https://redislabs.com) | [git](https://github.com/RedisLabs/JReJSON/) |
-| rejson-py | Python | BSD-2-Clause | [Redis Labs](https://redislabs.com) | [git](https://github.com/RedisLabs/redis-py/) [pypi](https://pypi.python.org/pypi/rejson) |
-| go-rejson (redigo client) | Go | MIT | [Nitish Malhotra @nitishm](https://github.com/nitishm) | [git](https://github.com/nitishm/go-rejson/) |
-| jonson  (go-redis client)| Go | Apache-2.0 | [Daniel Krom @KromDaniel](https://github.com/KromDaniel) | [git](https://github.com/KromDaniel/rejonson) |

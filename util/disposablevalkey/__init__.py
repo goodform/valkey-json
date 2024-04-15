@@ -15,17 +15,17 @@ def get_random_port():
     return port
 
 
-class DisposableRedis(object):
-    def __init__(self, port=None, path='redis-server', **extra_args):
+class DisposableValkey(object):
+    def __init__(self, port=None, path='valkey-server', **extra_args):
         """
-        :param port: port number to start the redis server on. Specify none to automatically generate
+        :param port: port number to start the valkey server on. Specify none to automatically generate
         :type port: int|None
-        :param extra_args: any extra arguments kwargs will be passed to redis server as --key val
+        :param extra_args: any extra arguments kwargs will be passed to valkey server as --key val
         """
 
         self._port = port
 
-        # this will hold the actual port the redis is listening on. It's equal to `_port` unless `_port` is None
+        # this will hold the actual port the valkey is listening on. It's equal to `_port` unless `_port` is None
         # in that case `port` is randomly generated
         self.port = None
         self.extra_args = list(itertools.chain(

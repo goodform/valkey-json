@@ -1,5 +1,5 @@
 """
-Make charts from ReJSONBenchmark's output
+Make charts from ValkeyJSONBenchmark's output
 """
 
 import matplotlib.pyplot as plt

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from rmtest import ModuleTestCase
+from vkmtest import ModuleTestCase
 import redis
 import unittest
 import json
@@ -66,8 +66,8 @@ docs = {
 }
 
 
-class ReJSONTestCase(ModuleTestCase('../../src/rejson.so')):
-    """Tests ReJSON Redis module in vitro"""
+class ValkeyJSONTestCase(ModuleTestCase('../../src/valkeyjson.so')):
+    """Tests ValkeyJSON module in vitro"""
 
     def assertNotExists(self, r, key, msg=None):
         self.assertFalse(r.exists(key), msg)
@@ -79,7 +79,7 @@ class ReJSONTestCase(ModuleTestCase('../../src/rejson.so')):
         self.assertTrue(r.exists(key), msg)
 
     def testSetRootWithInvalidJSONValuesShouldFail(self):
-        """Test that setting the root of a ReJSON key with invalid JSON values fails"""
+        """Test that setting the root of a ValkeyJSON key with invalid JSON values fails"""
         with self.redis() as r:
             r.client_setname(self._testMethodName)
             r.flushdb()
@@ -225,7 +225,7 @@ class ReJSONTestCase(ModuleTestCase('../../src/rejson.so')):
             self.assertDictEqual(data, docs['values'])
 
     def testMgetCommand(self):
-        """Test REJSON.MGET command"""
+        """Test JSON.MGET command"""
 
         with self.redis() as r:
             r.client_setname(self._testMethodName)
@@ -258,7 +258,7 @@ class ReJSONTestCase(ModuleTestCase('../../src/rejson.so')):
                 r.execute_command('JSON.MGET', 'doc:0', 'doc:1', '42isnotapath')
 
     def testDelCommand(self):
-        """Test REJSON.DEL command"""
+        """Test JSON.DEL command"""
 
         with self.redis() as r:
             r.client_setname(self._testMethodName)
@@ -675,7 +675,7 @@ class ReJSONTestCase(ModuleTestCase('../../src/rejson.so')):
                                 self.assertEqual(d1, d2, path)
 
     def testIssue_13(self):
-        """https://github.com/RedisLabsModules/rejson/issues/13"""
+        """ Crash in JSON.GET using the same path """
 
         with self.redis() as r:
             r.client_setname(self._testMethodName)

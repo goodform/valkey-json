@@ -83,10 +83,10 @@ inline static void popCallback(jsonsl_t jsn, jsonsl_action_t action, struct json
             jsonsl_error_t err;
             size_t newlen;
 
-            buffer = RedisModule_Calloc(len, sizeof(char));
+            buffer = ValkeyModule_Calloc(len, sizeof(char));
             newlen = jsonsl_util_unescape(pos, buffer, len, _AllowedEscapes, &err);
             if (!newlen) {
-                RedisModule_Free(buffer);
+                ValkeyModule_Free(buffer);
                 errorCallback(jsn, err, state, NULL);
                 return;
             }
@@ -103,7 +103,7 @@ inline static void popCallback(jsonsl_t jsn, jsonsl_action_t action, struct json
             n = NewKeyValNode(pos, len, NULL);  // NULL is a placeholder for now
         _pushNode(jpctx, n);
 
-        if (buffer) RedisModule_Free(buffer);
+        if (buffer) ValkeyModule_Free(buffer);
     }
 
     // popped special values are also added to the node stack
@@ -185,7 +185,7 @@ int CreateNodeFromJSON(JSONObjectCtx *ctx, const char *buf, size_t len, Node **n
      */
     if ((is_scalar = ('{' != _buf[_off]) && ('[' != _buf[_off]) && _off < _len)) {
         _len = _len - _off + 2;
-        _buf = RedisModule_Calloc(_len, sizeof(char));
+        _buf = ValkeyModule_Calloc(_len, sizeof(char));
         _buf[0] = '[';
         _buf[_len - 1] = ']';
         memcpy(&_buf[1], &buf[_off], len - _off);
@@ -222,7 +222,7 @@ int CreateNodeFromJSON(JSONObjectCtx *ctx, const char *buf, size_t len, Node **n
         Node_ArrayItem(ctx->pctx->nodes[0], 0, node);
         Node_ArraySet(ctx->pctx->nodes[0], 0, NULL);
         Node_Free(_popNode(ctx->pctx));
-        RedisModule_Free(_buf);
+        ValkeyModule_Free(_buf);
     } else {
         *node = _popNode(ctx->pctx);
     }
@@ -234,14 +234,14 @@ int CreateNodeFromJSON(JSONObjectCtx *ctx, const char *buf, size_t len, Node **n
 error:
     // set error string, if one has been passed
     if (err) {
-        *err = rmstrndup(serr, strlen(serr));
+        *err = vkmstrndup(serr, strlen(serr));
     }
 
     // free any nodes that are in the stack
     while (ctx->pctx->nlen) Node_Free(_popNode(ctx->pctx));
 
     // if this is a scalar, we need to release the temporary buffer
-    if (is_scalar) RedisModule_Free(_buf);
+    if (is_scalar) ValkeyModule_Free(_buf);
 
     sdsfree(serr);
 
@@ -402,7 +402,7 @@ inline static void _JSONSerialize_ContainerDelimiter(void *ctx) {
 void SerializeNodeToJSON(const Node *node, const JSONSerializeOpt *opt, sds *json) {
 
     // set up the builder
-    _JSONBuilderContext *b = RedisModule_Calloc(1, sizeof(_JSONBuilderContext));
+    _JSONBuilderContext *b = ValkeyModule_Calloc(1, sizeof(_JSONBuilderContext));
     b->indentstr = opt->indentstr ? sdsnew(opt->indentstr) : sdsempty();
     b->newlinestr = opt->newlinestr ? sdsnew(opt->newlinestr) : sdsempty();
     b->spacestr = opt->spacestr ? sdsnew(opt->spacestr) : sdsempty();
@@ -427,12 +427,12 @@ void SerializeNodeToJSON(const Node *node, const JSONSerializeOpt *opt, sds *jso
     sdsfree(b->newlinestr);
     sdsfree(b->spacestr);
     sdsfree(b->delimstr);
-    RedisModule_Free(b);
+    ValkeyModule_Free(b);
 }
 
 /* JSONObjectContext */
 JSONObjectCtx *NewJSONObjectCtx(int levels) {
-    JSONObjectCtx *ret = RedisModule_Calloc(1, sizeof(JSONObjectCtx));
+    JSONObjectCtx *ret = ValkeyModule_Calloc(1, sizeof(JSONObjectCtx));
 
     // Parser setup
     if (0 >= levels || JSONSL_MAX_LEVELS < levels) {
@@ -448,8 +448,8 @@ JSONObjectCtx *NewJSONObjectCtx(int levels) {
     jsonsl_enable_all_callbacks(ret->parser);
 
     // Parser context setup
-    ret->pctx = RedisModule_Calloc(1, sizeof(_JsonParserContext));
-    ret->pctx->nodes = RedisModule_Calloc(ret->levels, sizeof(Node *));
+    ret->pctx = ValkeyModule_Calloc(1, sizeof(_JsonParserContext));
+    ret->pctx->nodes = ValkeyModule_Calloc(ret->levels, sizeof(Node *));
     ret->parser->data = ret->pctx;
 
     return ret;
@@ -466,10 +466,10 @@ void resetJSONObjectCtx(JSONObjectCtx *ctx) {
 
 void FreeJSONObjectCtx(JSONObjectCtx *ctx) {
     if (ctx) {
-        RedisModule_Free(ctx->pctx->nodes);
-        RedisModule_Free(ctx->pctx);
+        ValkeyModule_Free(ctx->pctx->nodes);
+        ValkeyModule_Free(ctx->pctx);
         jsonsl_destroy(ctx->parser);
-        RedisModule_Free(ctx);
+        ValkeyModule_Free(ctx);
     }
 }
 

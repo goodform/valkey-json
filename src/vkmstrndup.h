@@ -16,13 +16,11 @@
 */
 #include <stddef.h>
 #include <string.h>
-#include "redismodule.h"
-#include "rmstrndup.h"
+#include "valkeymodule.h"
 
-/* A patched implementation of strdup that will use our patched calloc */
-char *rmstrndup(const char *s, size_t n) {
-  char *ret = RedisModule_Calloc(n + 1, sizeof(char));
-  if (ret)
-    memcpy(ret, s, n);
-  return ret;
-}
+#ifndef __VKMSTRNDUP_H__
+#define __VKMSTRNDUP_H__
+
+char *vkmstrndup(const char *s, size_t n);
+
+#endif

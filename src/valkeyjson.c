@@ -1,5 +1,5 @@
 /*
- * ReJSON - a JSON data type for Redis
+ * ValkeyJSON - a JSON data type for Valkey
  * Copyright (C) 2017 Redis Labs
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "rejson.h"
+#include "valkeyjson.h"
 #include "cache.h"
 
 // A struct to keep module the module context
@@ -76,7 +76,7 @@ typedef struct JSONPathNode_t {
 void JSONPathNode_Free(JSONPathNode_t *jpn) {
     if (jpn) {
         SearchPath_Free(&jpn->sp);
-        RedisModule_Free(jpn);
+        ValkeyModule_Free(jpn);
     }
 }
 
@@ -84,15 +84,15 @@ void JSONPathNode_Free(JSONPathNode_t *jpn) {
  * p is n's parent, errors are set into err and level is the error's depth
  * Returns PARSE_OK if parsing successful
  */
-int NodeFromJSONPath(Node *root, const RedisModuleString *path, JSONPathNode_t **jpn) {
+int NodeFromJSONPath(Node *root, const ValkeyModuleString *path, JSONPathNode_t **jpn) {
     // initialize everything
-    JSONPathNode_t *_jpn = RedisModule_Calloc(1, sizeof(JSONPathNode_t));
+    JSONPathNode_t *_jpn = ValkeyModule_Calloc(1, sizeof(JSONPathNode_t));
     _jpn->errlevel = -1;
     JSONSearchPathError_t jsperr = {0};
 
     // path must be valid from the root or it's an error
     _jpn->sp = NewSearchPath(0);
-    _jpn->spath = RedisModule_StringPtrLen(path, &_jpn->spathlen);
+    _jpn->spath = ValkeyModule_StringPtrLen(path, &_jpn->spathlen);
     if (PARSE_ERR == ParseJSONPath(_jpn->spath, _jpn->spathlen, &_jpn->sp, &jsperr)) {
         SearchPath_Free(&_jpn->sp);
         _jpn->sp.nodes = NULL;  // in case someone tries to free it later
@@ -115,23 +115,23 @@ int NodeFromJSONPath(Node *root, const RedisModuleString *path, JSONPathNode_t *
 }
 
 /* Replies with an error about a search path */
-void ReplyWithSearchPathError(RedisModuleCtx *ctx, JSONPathNode_t *jpn) {
+void ReplyWithSearchPathError(ValkeyModuleCtx *ctx, JSONPathNode_t *jpn) {
     sds err = sdscatfmt(sdsempty(), "ERR Search path error at offset %I: %s",
                         (long long)jpn->sperroffset + 1, jpn->sperrmsg ? jpn->sperrmsg : "(null)");
-    RedisModule_ReplyWithError(ctx, err);
+    ValkeyModule_ReplyWithError(ctx, err);
     sdsfree(err);
 }
 
 /* Replies with an error about a wrong type of node in a path */
-void ReplyWithPathTypeError(RedisModuleCtx *ctx, NodeType expected, NodeType actual) {
-    sds err = sdscatfmt(sdsempty(), REJSON_ERROR_PATH_WRONGTYPE, NodeTypeStr(expected),
+void ReplyWithPathTypeError(ValkeyModuleCtx *ctx, NodeType expected, NodeType actual) {
+    sds err = sdscatfmt(sdsempty(), VALKEYJSON_ERROR_PATH_WRONGTYPE, NodeTypeStr(expected),
                         NodeTypeStr(actual));
-    RedisModule_ReplyWithError(ctx, err);
+    ValkeyModule_ReplyWithError(ctx, err);
     sdsfree(err);
 }
 
 /* Generic path error reply handler */
-void ReplyWithPathError(RedisModuleCtx *ctx, const JSONPathNode_t *jpn) {
+void ReplyWithPathError(ValkeyModuleCtx *ctx, const JSONPathNode_t *jpn) {
     // TODO: report actual position in path & literal token
     PathNode *epn = &jpn->sp.nodes[jpn->errlevel];
     sds err = sdsempty();
@@ -160,12 +160,12 @@ void ReplyWithPathError(RedisModuleCtx *ctx, const JSONPathNode_t *jpn) {
             err = sdscatfmt(err, "ERR unknown path error at level %i in path", jpn->errlevel);
             break;
     }  // switch (err)
-    RedisModule_ReplyWithError(ctx, err);
+    ValkeyModule_ReplyWithError(ctx, err);
     sdsfree(err);
 }
 
-/* The custom Redis data type. */
-static RedisModuleType *JSONType;
+/* The custom Valkey data type. */
+static ValkeyModuleType *JSONType;
 
 // == Module JSON commands ==
 
@@ -186,31 +186,31 @@ static RedisModuleType *JSONType;
 *
 * Reply: Array, specifically the JSON's RESP form.
 */
-int JSONResp_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONResp_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     if ((argc < 2) || (argc > 3)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty (reply with null) or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
-    } else if (RedisModule_ModuleTypeGetType(key) != JSONType) {
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithNull(ctx);
+        return VALKEYMODULE_OK;
+    } else if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
         {
-            RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-            return REDISMODULE_ERR;
+            ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+            return VALKEYMODULE_ERR;
         }
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (3 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (3 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -224,11 +224,11 @@ int JSONResp_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
     }
 
     JSONPathNode_Free(jpn);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -244,77 +244,77 @@ error:
  *   `MEMORY` returns an integer, specifically the size in bytes of the value
  *   `HELP` returns an array, specifically with the help message
  */
-int JSONDebug_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONDebug_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check for minimal arity
     if (argc < 2) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     size_t subcmdlen;
-    const char *subcmd = RedisModule_StringPtrLen(argv[1], &subcmdlen);
+    const char *subcmd = ValkeyModule_StringPtrLen(argv[1], &subcmdlen);
     if (!strncasecmp("memory", subcmd, subcmdlen)) {
         // verify we have enough arguments
         if ((argc < 3) || (argc > 4)) {
-            RedisModule_WrongArity(ctx);
-            return REDISMODULE_ERR;
+            ValkeyModule_WrongArity(ctx);
+            return VALKEYMODULE_ERR;
         }
 
         // reply to getkeys-api requests
-        if (RedisModule_IsKeysPositionRequest(ctx)) {
-            RedisModule_KeyAtPos(ctx, 2);
-            return REDISMODULE_OK;
+        if (ValkeyModule_IsKeysPositionRequest(ctx)) {
+            ValkeyModule_KeyAtPos(ctx, 2);
+            return VALKEYMODULE_OK;
         }
 
         // key must be empty (reply with null) or a JSON type
-        RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[2], REDISMODULE_READ);
-        int type = RedisModule_KeyType(key);
-        if (REDISMODULE_KEYTYPE_EMPTY == type) {
-            RedisModule_ReplyWithNull(ctx);
-            return REDISMODULE_OK;
-        } else if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-            RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-            return REDISMODULE_ERR;
+        ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[2], VALKEYMODULE_READ);
+        int type = ValkeyModule_KeyType(key);
+        if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+            ValkeyModule_ReplyWithNull(ctx);
+            return VALKEYMODULE_OK;
+        } else if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+            ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+            return VALKEYMODULE_ERR;
         }
 
         // validate path
-        JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+        JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
         JSONPathNode_t *jpn = NULL;
-        RedisModuleString *spath =
-            (4 == argc ? argv[3] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+        ValkeyModuleString *spath =
+            (4 == argc ? argv[3] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
         if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
             ReplyWithSearchPathError(ctx, jpn);
             JSONPathNode_Free(jpn);
-            return REDISMODULE_ERR;
+            return VALKEYMODULE_ERR;
         }
 
         if (E_OK == jpn->err) {
-            RedisModule_ReplyWithLongLong(ctx, (long long)ObjectTypeMemoryUsage(jpn->n));
+            ValkeyModule_ReplyWithLongLong(ctx, (long long)ObjectTypeMemoryUsage(jpn->n));
             JSONPathNode_Free(jpn);
-            return REDISMODULE_OK;
+            return VALKEYMODULE_OK;
         } else {
             ReplyWithPathError(ctx, jpn);
             JSONPathNode_Free(jpn);
-            return REDISMODULE_ERR;
+            return VALKEYMODULE_ERR;
         }
     } else if (!strncasecmp("help", subcmd, subcmdlen)) {
         const char *help[] = {"MEMORY <key> [path] - reports memory usage",
                               "HELP                - this message", NULL};
 
-        RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+        ValkeyModule_ReplyWithArray(ctx, VALKEYMODULE_POSTPONED_ARRAY_LEN);
         int i = 0;
         for (; NULL != help[i]; i++) {
-            RedisModule_ReplyWithStringBuffer(ctx, help[i], strlen(help[i]));
+            ValkeyModule_ReplyWithStringBuffer(ctx, help[i], strlen(help[i]));
         }
-        RedisModule_ReplySetArrayLength(ctx, i);
+        ValkeyModule_ReplySetArrayLength(ctx, i);
 
-        return REDISMODULE_OK;
+        return VALKEYMODULE_OK;
     } else {  // unknown subcommand
-        RedisModule_ReplyWithError(ctx, "ERR unknown subcommand - try `JSON.DEBUG HELP`");
-        return REDISMODULE_ERR;
+        ValkeyModule_ReplyWithError(ctx, "ERR unknown subcommand - try `JSON.DEBUG HELP`");
+        return VALKEYMODULE_ERR;
     }
-    return REDISMODULE_OK;  // this is never reached
+    return VALKEYMODULE_OK;  // this is never reached
 }
 
 /**
@@ -323,47 +323,47 @@ int JSONDebug_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
  * `path` defaults to root if not provided. If the `key` or `path` do not exist, null is returned.
  * Reply: Simple string, specifically the type.
  */
-int JSONType_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONType_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 2) || (argc > 3)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithNull(ctx);
+        return VALKEYMODULE_OK;
     }
-    if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (3 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (3 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         JSONPathNode_Free(jpn);
-        return REDISMODULE_ERR;
+        return VALKEYMODULE_ERR;
     }
 
     // make the type-specifc reply, or deal with path errors
     if (E_OK == jpn->err) {
-        RedisModule_ReplyWithSimpleString(ctx, NodeTypeStr(NODETYPE(jpn->n)));
+        ValkeyModule_ReplyWithSimpleString(ctx, NodeTypeStr(NODETYPE(jpn->n)));
     } else {
         // reply with null if there are **any** non-existing elements along the path
-        RedisModule_ReplyWithNull(ctx);
+        ValkeyModule_ReplyWithNull(ctx);
     }
 
     JSONPathNode_Free(jpn);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 }
 
 /**
@@ -376,34 +376,34 @@ int JSONType_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
  *
  * Reply: Integer, specifically the length of the value.
  */
-int JSONLen_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONLen_GenericCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 2) || (argc > 3)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // the actual command
-    const char *cmd = RedisModule_StringPtrLen(argv[0], NULL);
+    const char *cmd = ValkeyModule_StringPtrLen(argv[0], NULL);
 
     // key must be empty or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithNull(ctx);
+        return VALKEYMODULE_OK;
     }
-    if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (3 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (3 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -426,18 +426,18 @@ int JSONLen_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
     // reply with the length per type, or with an error if the wrong type is encountered
     if (actual == expected) {
-        RedisModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
+        ValkeyModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
     } else {
         ReplyWithPathTypeError(ctx, expected, actual);
         goto error;
     }
 
     JSONPathNode_Free(jpn);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -449,31 +449,31 @@ error:
  *
  * Reply: Array, specifically the key names as bulk strings.
  */
-int JSONObjKeys_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONObjKeys_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 2) || (argc > 3)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithNull(ctx);
+        return VALKEYMODULE_OK;
     }
-    if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (3 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (3 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -482,7 +482,7 @@ int JSONObjKeys_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     // deal with path errors
     if (E_NOINDEX == jpn->err || E_NOKEY == jpn->err) {
         // reply with null if there are **any** non-existing elements along the path
-        RedisModule_ReplyWithNull(ctx);
+        ValkeyModule_ReplyWithNull(ctx);
         goto ok;
     } else if (E_OK != jpn->err) {
         ReplyWithPathError(ctx, jpn);
@@ -492,11 +492,11 @@ int JSONObjKeys_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     // reply with the object's keys if it is a dictionary, error otherwise
     if (N_DICT == NODETYPE(jpn->n)) {
         int len = Node_Length(jpn->n);
-        RedisModule_ReplyWithArray(ctx, len);
+        ValkeyModule_ReplyWithArray(ctx, len);
         for (int i = 0; i < len; i++) {
             // TODO: need an iterator for keys in dict
             const char *k = jpn->n->value.dictval.entries[i]->value.kvval.key;
-            RedisModule_ReplyWithStringBuffer(ctx, k, strlen(k));
+            ValkeyModule_ReplyWithStringBuffer(ctx, k, strlen(k));
         }
     } else {
         ReplyWithPathTypeError(ctx, N_DICT, NODETYPE(jpn->n));
@@ -505,43 +505,43 @@ int JSONObjKeys_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
 
 ok:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
  * JSON.SET <key> <path> <json> [NX|XX]
  * Sets the JSON value at `path` in `key`
  *
- * For new Redis keys the `path` must be the root. For existing keys, when the entire `path` exists,
+ * For new Valkey keys the `path` must be the root. For existing keys, when the entire `path` exists,
  * the value that it contains is replaced with the `json` value.
  *
- * A key (with its respective value) is added to a JSON Object (in a Redis ReJSON data type key) if
+ * A key (with its respective value) is added to a JSON Object (in a Valkey JSON data type key) if
  * and only if it is the last child in the `path`. The optional subcommands modify this behavior for
- * both new Redis ReJSON data type keys as well as JSON Object keys in them:
+ * both new Valkey JSON data type keys as well as JSON Object keys in them:
  *   `NX` - only set the key if it does not already exists
  *   `XX` - only set the key if it already exists
  *
  * Reply: Simple String `OK` if executed correctly, or Null Bulk if the specified `NX` or `XX`
  * conditions were not met.
  */
-int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONSet_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 4) || (argc > 5)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY != type && RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY != type && ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     JSONPathNode_t *jpn = NULL;
@@ -551,46 +551,46 @@ int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     // subcommand for key creation behavior modifiers NX and XX
     int subnx = 0, subxx = 0;
     if (argc > 4) {
-        const char *subcmd = RedisModule_StringPtrLen(argv[4], NULL);
+        const char *subcmd = ValkeyModule_StringPtrLen(argv[4], NULL);
         if (!strcasecmp("nx", subcmd)) {
             subnx = 1;
         } else if (!strcasecmp("xx", subcmd)) {
             // new keys can be created only if the XX flag is off
-            if (REDISMODULE_KEYTYPE_EMPTY == type) goto null;
+            if (VALKEYMODULE_KEYTYPE_EMPTY == type) goto null;
             subxx = 1;
         } else {
-            RedisModule_ReplyWithError(ctx, RM_ERRORMSG_SYNTAX);
-            return REDISMODULE_ERR;
+            ValkeyModule_ReplyWithError(ctx, VKM_ERRORMSG_SYNTAX);
+            return VALKEYMODULE_ERR;
         }
     }
 
     // JSON must be valid
     size_t jsonlen;
-    const char *json = RedisModule_StringPtrLen(argv[3], &jsonlen);
+    const char *json = ValkeyModule_StringPtrLen(argv[3], &jsonlen);
     if (!jsonlen) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_EMPTY_STRING);
-        return REDISMODULE_ERR;
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_EMPTY_STRING);
+        return VALKEYMODULE_ERR;
     }
 
     // Create object from json
     if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, json, jsonlen, &jo, &jerr)) {
         if (jerr) {
-            RedisModule_ReplyWithError(ctx, jerr);
-            RedisModule_Free(jerr);
+            ValkeyModule_ReplyWithError(ctx, jerr);
+            ValkeyModule_Free(jerr);
         } else {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
         }
-        return REDISMODULE_ERR;
+        return VALKEYMODULE_ERR;
     }
 
     // initialize or get JSON type container
     JSONType_t *jt = NULL;
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        jt = RedisModule_Calloc(1, sizeof(JSONType_t));
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        jt = ValkeyModule_Calloc(1, sizeof(JSONType_t));
         jt->root = jo;
     } else {
-        jt = RedisModule_ModuleTypeGetValue(key);
+        jt = ValkeyModule_ModuleTypeGetValue(key);
     }
 
     /* Validate path against the existing object root, and pretend that the new object is the root
@@ -604,13 +604,13 @@ int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     int isRootPath = SearchPath_IsRootPath(&jpn->sp);
 
     // handle an empty key
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
         // new keys must be created at the root
         if (E_OK != jpn->err || !isRootPath) {
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_NEW_NOT_ROOT);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_NEW_NOT_ROOT);
             goto error;
         }
-        RedisModule_ModuleTypeSetValue(key, JSONType, jt);
+        ValkeyModule_ModuleTypeSetValue(key, JSONType, jt);
         goto ok;
     }
 
@@ -622,7 +622,7 @@ int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
 
     // verify that we're dealing with the last child in case of an object
     if (E_NOKEY == jpn->err && jpn->errlevel != jpn->sp.len - 1) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_PATH_NONTERMINAL_KEY);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_PATH_NONTERMINAL_KEY);
         goto error;
     }
 
@@ -637,28 +637,28 @@ int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
 
         // other containers, i.e. arrays, do not sport the NX or XX behavioral modification agents
         if (N_ARRAY == ntp && (subnx || subxx)) {
-            RedisModule_ReplyWithError(ctx, RM_ERRORMSG_SYNTAX);
+            ValkeyModule_ReplyWithError(ctx, VKM_ERRORMSG_SYNTAX);
             goto error;
         }
 
         if (isRootPath) {
             // replacing the root is easy
-            RedisModule_DeleteKey(key);
-            jt = RedisModule_Calloc(1, sizeof(JSONType_t));
+            ValkeyModule_DeleteKey(key);
+            jt = ValkeyModule_Calloc(1, sizeof(JSONType_t));
             jt->root = jo;
-            RedisModule_ModuleTypeSetValue(key, JSONType, jt);
+            ValkeyModule_ModuleTypeSetValue(key, JSONType, jt);
         } else if (N_DICT == NODETYPE(jpn->p)) {
             if (OBJ_OK != Node_DictSet(jpn->p, jpn->sp.nodes[jpn->sp.len - 1].value.key, jo)) {
-                RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_DICT_SET);
-                RedisModule_ReplyWithError(ctx, REJSON_ERROR_DICT_SET);
+                VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_DICT_SET);
+                ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_DICT_SET);
                 goto error;
             }
         } else {  // must be an array
             int index = jpn->sp.nodes[jpn->sp.len - 1].value.index;
             if (index < 0) index = Node_Length(jpn->p) + index;
             if (OBJ_OK != Node_ArraySet(jpn->p, index, jo)) {
-                RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_ARRAY_SET);
-                RedisModule_ReplyWithError(ctx, REJSON_ERROR_ARRAY_SET);
+                VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_ARRAY_SET);
+                ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_ARRAY_SET);
                 goto error;
             }
             // unlike DictSet, ArraySet does not free so we need to call it explicitly
@@ -670,32 +670,32 @@ int JSONSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
             goto null;
         }
         if (OBJ_OK != Node_DictSet(jpn->p, jpn->sp.nodes[jpn->sp.len - 1].value.key, jo)) {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_DICT_SET);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_DICT_SET);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_DICT_SET);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_DICT_SET);
             goto error;
         }
     }
 
 ok:
     maybeClearPathCache(jt, jpn);
-    RedisModule_ReplyWithSimpleString(ctx, "OK");
+    ValkeyModule_ReplyWithSimpleString(ctx, "OK");
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 null:
-    RedisModule_ReplyWithNull(ctx);
+    ValkeyModule_ReplyWithNull(ctx);
     JSONPathNode_Free(jpn);
     if (jo) Node_Free(jo);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    if (jt && REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_Free(jt);
+    if (jt && VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_Free(jt);
     }
     if (jo) Node_Free(jo);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 static void maybeClearPathCache(JSONType_t *jt, const JSONPathNode_t *pn) {
@@ -711,9 +711,9 @@ static void maybeClearPathCache(JSONType_t *jt, const JSONPathNode_t *pn) {
     }
 
     if (pathLen == 0) {
-        LruCache_ClearKey(REJSON_LRUCACHE_GLOBAL, jt);
+        LruCache_ClearKey(VALKEYJSON_LRUCACHE_GLOBAL, jt);
     } else {
-        LruCache_ClearValues(REJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen);
+        LruCache_ClearValues(VALKEYJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen);
     }
 }
 
@@ -751,7 +751,7 @@ static sds getSerializedJson(JSONType_t *jt, const JSONPathNode_t *pathInfo,
     }
 
     if (shouldCache) {
-        ret = LruCache_GetValue(REJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen);
+        ret = LruCache_GetValue(VALKEYJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen);
     }
     if (ret) {
         *wasFound = 1;
@@ -769,7 +769,7 @@ static sds getSerializedJson(JSONType_t *jt, const JSONPathNode_t *pathInfo,
     }
     SerializeNodeToJSON(pathInfo->n, opts, &ret);
     if (shouldCache) {
-        LruCache_AddValue(REJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen, ret, sdslen(ret));
+        LruCache_AddValue(VALKEYJSON_LRUCACHE_GLOBAL, jt, pathStr, pathLen, ret, sdslen(ret));
     }
     *wasFound = 0;
     if (target) {
@@ -784,13 +784,13 @@ static int isCachableOptions(const JSONSerializeOpt *opts) {
            (!opts->spacestr || *opts->spacestr) == 0 && (opts->noescape == 0);
 }
 
-static void sendSingleResponse(RedisModuleCtx *ctx, JSONType_t *jt, const JSONPathNode_t *pn,
+static void sendSingleResponse(ValkeyModuleCtx *ctx, JSONType_t *jt, const JSONPathNode_t *pn,
                                const JSONSerializeOpt *options) {
     sds json = NULL;
     if (!isCachableOptions(options)) {
         json = sdsempty();
         SerializeNodeToJSON(pn->n, options, &json);
-        RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+        ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
         sdsfree(json);
         return;
     }
@@ -798,13 +798,13 @@ static void sendSingleResponse(RedisModuleCtx *ctx, JSONType_t *jt, const JSONPa
     int isFromCache = 0;
     json = getSerializedJson(jt, pn, options, &isFromCache, NULL);
     // Send the response now
-    RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+    ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
     if (!isFromCache) {
         sdsfree(json);
     }
 }
 
-static void sendMultiResponse(RedisModuleCtx *ctx, JSONType_t *jt, JSONPathNode_t **pns,
+static void sendMultiResponse(ValkeyModuleCtx *ctx, JSONType_t *jt, JSONPathNode_t **pns,
                               size_t npns, const JSONSerializeOpt *options) {
     sds json = NULL;
     if (!isCachableOptions(options)) {
@@ -820,7 +820,7 @@ static void sendMultiResponse(RedisModuleCtx *ctx, JSONType_t *jt, JSONPathNode_
             }
         }
         SerializeNodeToJSON(objReply, options, &json);
-        RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+        ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
         sdsfree(json);
 
         // avoid removing the actual data by resetting the reply dict
@@ -845,7 +845,7 @@ static void sendMultiResponse(RedisModuleCtx *ctx, JSONType_t *jt, JSONPathNode_
         }
     }
     json = sdscat(json, "}");
-    RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+    ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
     sdsfree(json);
 }
 
@@ -867,29 +867,29 @@ static void sendMultiResponse(RedisModuleCtx *ctx, JSONType_t *jt, JSONPathNode_
  * value being itself is returned, whereas multiple paths are returned as a JSON object in which
  * each path is a key.
  */
-int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONGet_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     if ((argc < 2)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty (reply with null) or an object type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
-    } else if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithNull(ctx);
+        return VALKEYMODULE_OK;
+    } else if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // check for optional arguments
     int pathpos = 2;
     JSONSerializeOpt jsopt = {0};
     if (pathpos < argc) {
-        RMUtil_ParseArgsAfter("indent", argv, argc, "c", &jsopt.indentstr);
+        VKMUtil_ParseArgsAfter("indent", argv, argc, "c", &jsopt.indentstr);
         if (jsopt.indentstr) {
             pathpos += 2;
         } else {
@@ -897,7 +897,7 @@ int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
         }
     }
     if (pathpos < argc) {
-        RMUtil_ParseArgsAfter("newline", argv, argc, "c", &jsopt.newlinestr);
+        VKMUtil_ParseArgsAfter("newline", argv, argc, "c", &jsopt.newlinestr);
         if (jsopt.newlinestr) {
             pathpos += 2;
         } else {
@@ -905,7 +905,7 @@ int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
         }
     }
     if (pathpos < argc) {
-        RMUtil_ParseArgsAfter("space", argv, argc, "c", &jsopt.spacestr);
+        VKMUtil_ParseArgsAfter("space", argv, argc, "c", &jsopt.spacestr);
         if (jsopt.spacestr) {
             pathpos += 2;
         } else {
@@ -913,18 +913,18 @@ int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
         }
     }
 
-    if (RMUtil_ArgExists("noescape", argv, argc, 2)) {
+    if (VKMUtil_ArgExists("noescape", argv, argc, 2)) {
         jsopt.noescape = 1;
         pathpos++;
     }
 
     // validate paths, if none provided default to root
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     int npaths = argc - pathpos;
     int jpnslen = 0;
-    JSONPathNode_t **jpns = RedisModule_Calloc(MAX(npaths, 1), sizeof(JSONPathNode_t *));
+    JSONPathNode_t **jpns = ValkeyModule_Calloc(MAX(npaths, 1), sizeof(JSONPathNode_t *));
     if (!npaths) {  // default to root
-        NodeFromJSONPath(jt->root, RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1), &jpns[0]);
+        NodeFromJSONPath(jt->root, ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1), &jpns[0]);
         jpnslen = 1;
     } else {
         while (jpnslen < npaths) {
@@ -955,8 +955,8 @@ int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
 
     // check whether serialization had succeeded
     // if (!sdslen(json)) {
-    //     RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_SERIALIZE);
-    //     RedisModule_ReplyWithError(ctx, REJSON_ERROR_SERIALIZE);
+    //     VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_SERIALIZE);
+    //     ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_SERIALIZE);
     //     goto error;
     // }
 
@@ -964,15 +964,15 @@ int JSONGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
         JSONPathNode_Free(jpns[i]);
     }
 
-    RedisModule_Free(jpns);
-    return REDISMODULE_OK;
+    ValkeyModule_Free(jpns);
+    return VALKEYMODULE_OK;
 
 error:
     for (int i = 0; i < jpnslen; i++) {
         JSONPathNode_Free(jpns[i]);
     }
-    RedisModule_Free(jpns);
-    return REDISMODULE_ERR;
+    ValkeyModule_Free(jpns);
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -981,20 +981,20 @@ error:
  * are reported as null. Reply: Array of Bulk Strings, specifically the JSON serialization of
  * the value at each key's path.
  */
-int JSONMGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONMGet_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     if ((argc < 2)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    if (RedisModule_IsKeysPositionRequest(ctx)) {
-        for (int i = 1; i < argc - 1; i++) RedisModule_KeyAtPos(ctx, i);
-        return REDISMODULE_OK;
+    if (ValkeyModule_IsKeysPositionRequest(ctx)) {
+        for (int i = 1; i < argc - 1; i++) ValkeyModule_KeyAtPos(ctx, i);
+        return VALKEYMODULE_OK;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // validate search path
     size_t spathlen;
-    const char *spath = RedisModule_StringPtrLen(argv[argc - 1], &spathlen);
+    const char *spath = ValkeyModule_StringPtrLen(argv[argc - 1], &spathlen);
     JSONPathNode_t jpn = {0};
     JSONSearchPathError_t jsperr = {0};
     jpn.sp = NewSearchPath(0);
@@ -1006,19 +1006,19 @@ int JSONMGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
     }
 
     // iterate keys
-    RedisModule_ReplyWithArray(ctx, argc - 2);
+    ValkeyModule_ReplyWithArray(ctx, argc - 2);
     int isRootPath = SearchPath_IsRootPath(&jpn.sp);
     JSONSerializeOpt jsopt = {0};
     for (int i = 1; i < argc - 1; i++) {
-        RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[i], REDISMODULE_READ);
+        ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[i], VALKEYMODULE_READ);
 
-        // key must an object type, empties and others return null like Redis' MGET
-        int type = RedisModule_KeyType(key);
-        if (REDISMODULE_KEYTYPE_EMPTY == type) goto null;
-        if (RedisModule_ModuleTypeGetType(key) != JSONType) goto null;
+        // key must an object type, empties and others return null like Valkey' MGET
+        int type = ValkeyModule_KeyType(key);
+        if (VALKEYMODULE_KEYTYPE_EMPTY == type) goto null;
+        if (ValkeyModule_ModuleTypeGetType(key) != JSONType) goto null;
 
         // follow the path to the target node in the key
-        JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+        JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
         if (isRootPath) {
             jpn.err = E_OK;
             jpn.n = jt->root;
@@ -1036,26 +1036,26 @@ int JSONMGet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
         // check whether serialization had succeeded
         if (!sdslen(json)) {
             sdsfree(json);
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_SERIALIZE);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_SERIALIZE);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_SERIALIZE);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_SERIALIZE);
             goto error;
         }
 
         // add the serialization of object for that key's path
-        RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+        ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
         sdsfree(json);
         continue;
 
     null:  // reply with null for keys that the path mismatches
-        RedisModule_ReplyWithNull(ctx);
+        ValkeyModule_ReplyWithNull(ctx);
     }
 
     SearchPath_Free(&jpn.sp);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     SearchPath_Free(&jpn.sp);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1063,34 +1063,34 @@ error:
  * Delete a value.
  *
  * `path` defaults to root if not provided. Non-existing keys as well as non-existing paths are
- * ignored. Deleting an object's root is equivalent to deleting the key from Redis.
+ * ignored. Deleting an object's root is equivalent to deleting the key from Valkey.
  *
  * Reply: Integer, specifically the number of paths deleted (0 or 1).
  */
-int JSONDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONDel_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 2) || (argc > 3)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key must be empty or a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithLongLong(ctx, 0);
-        return REDISMODULE_OK;
-    } else if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithLongLong(ctx, 0);
+        return VALKEYMODULE_OK;
+    } else if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (3 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (3 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -1099,7 +1099,7 @@ int JSONDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     // deal with path errors
     if (E_NOINDEX == jpn->err || E_NOKEY == jpn->err) {
         // reply with 0 if there are **any** non-existing elements along the path
-        RedisModule_ReplyWithLongLong(ctx, 0);
+        ValkeyModule_ReplyWithLongLong(ctx, 0);
         goto ok;
     } else if (E_OK != jpn->err) {
         ReplyWithPathError(ctx, jpn);
@@ -1111,33 +1111,33 @@ int JSONDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
 
     // if it is the root then delete the key, otherwise delete the target from parent container
     if (SearchPath_IsRootPath(&jpn->sp)) {
-        RedisModule_DeleteKey(key);
+        ValkeyModule_DeleteKey(key);
     } else if (N_DICT == NODETYPE(jpn->p)) {  // delete from a dict
         const char *dictkey = jpn->sp.nodes[jpn->sp.len - 1].value.key;
         if (OBJ_OK != Node_DictDel(jpn->p, dictkey)) {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_DICT_DEL);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_DICT_DEL);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_DICT_DEL);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_DICT_DEL);
             goto error;
         }
     } else {  // container must be an array
         int index = jpn->sp.nodes[jpn->sp.len - 1].value.index;
         if (OBJ_OK != Node_ArrayDelRange(jpn->p, index, 1)) {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_ARRAY_DEL);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_ARRAY_DEL);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_ARRAY_DEL);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_ARRAY_DEL);
             goto error;
         }
     }  // if (N_DICT)
 
-    RedisModule_ReplyWithLongLong(ctx, (long long)argc - 2);
+    ValkeyModule_ReplyWithLongLong(ctx, (long long)argc - 2);
 
 ok:
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1147,33 +1147,33 @@ error:
  * `path` must exist path and must be a number value.
  * Reply: String, specifically the resulting JSON number value
  */
-int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONNum_GenericCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     if ((argc < 3) || (argc > 4)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
-    const char *cmd = RedisModule_StringPtrLen(argv[0], NULL);
+    const char *cmd = ValkeyModule_StringPtrLen(argv[0], NULL);
     double oval, bval, rz;  // original value, by value and the result
     Object *joval = NULL;   // the by value as a JSON object
 
     // key must be an object type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_KEY_REQUIRED);
-        return REDISMODULE_ERR;
-    } else if (RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_KEY_REQUIRED);
+        return VALKEYMODULE_ERR;
+    } else if (ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (4 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (4 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -1187,8 +1187,8 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
     // verify that the target value is a number
     if (N_INTEGER != NODETYPE(jpn->n) && N_NUMBER != NODETYPE(jpn->n)) {
-        sds err = sdscatfmt(sdsempty(), REJSON_ERROR_PATH_NANTYPE, NodeTypeStr(NODETYPE(jpn->n)));
-        RedisModule_ReplyWithError(ctx, err);
+        sds err = sdscatfmt(sdsempty(), VALKEYJSON_ERROR_PATH_NANTYPE, NodeTypeStr(NODETYPE(jpn->n)));
+        ValkeyModule_ReplyWithError(ctx, err);
         sdsfree(err);
         goto error;
     }
@@ -1197,22 +1197,22 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     // we use the json parser to convert the bval arg into a value to catch all of JSON's
     // syntices
     size_t vallen;
-    const char *val = RedisModule_StringPtrLen(argv[(4 == argc ? 3 : 2)], &vallen);
+    const char *val = ValkeyModule_StringPtrLen(argv[(4 == argc ? 3 : 2)], &vallen);
     char *jerr = NULL;
     if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, val, vallen, &joval, &jerr)) {
         if (jerr) {
-            RedisModule_ReplyWithError(ctx, jerr);
-            RedisModule_Free(jerr);
+            ValkeyModule_ReplyWithError(ctx, jerr);
+            ValkeyModule_Free(jerr);
         } else {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
         }
         goto error;
     }
 
     // the by value must be a number
     if (N_INTEGER != NODETYPE(joval) && N_NUMBER != NODETYPE(joval)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_VALUE_NAN);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_VALUE_NAN);
         goto error;
     }
     bval = NODEVALUE_AS_DOUBLE(joval);
@@ -1226,7 +1226,7 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
     // check that the result is valid
     if (isnan(rz) || isinf(rz)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_RESULT_NAN_OR_INF);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_RESULT_NAN_OR_INF);
         goto error;
     }
 
@@ -1242,22 +1242,22 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
     // replace the original value with the result depending on the parent container's type
     if (SearchPath_IsRootPath(&jpn->sp)) {
-        RedisModule_DeleteKey(key);
-        jt = RedisModule_Calloc(1, sizeof(JSONType_t));
+        ValkeyModule_DeleteKey(key);
+        jt = ValkeyModule_Calloc(1, sizeof(JSONType_t));
         jt->root = orz;
-        RedisModule_ModuleTypeSetValue(key, JSONType, jt);
+        ValkeyModule_ModuleTypeSetValue(key, JSONType, jt);
     } else if (N_DICT == NODETYPE(jpn->p)) {
         if (OBJ_OK != Node_DictSet(jpn->p, jpn->sp.nodes[jpn->sp.len - 1].value.key, orz)) {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_DICT_SET);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_DICT_SET);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_DICT_SET);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_DICT_SET);
             goto error;
         }
     } else {  // container must be an array
         int index = jpn->sp.nodes[jpn->sp.len - 1].value.index;
         if (index < 0) index = Node_Length(jpn->p) + index;
         if (OBJ_OK != Node_ArraySet(jpn->p, index, orz)) {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_ARRAY_SET);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_ARRAY_SET);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_ARRAY_SET);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_ARRAY_SET);
             goto error;
         }
         // unlike DictSet, ArraySet does not free so we need to call it explicitly
@@ -1269,7 +1269,7 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     JSONSerializeOpt jsopt = {0};
     sds json = sdsempty();
     SerializeNodeToJSON(jpn->n, &jsopt, &json);
-    RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+    ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
     maybeClearPathCache(jt, jpn);
 
     sdsfree(json);
@@ -1277,13 +1277,13 @@ int JSONNum_GenericCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
     Node_Free(joval);
     JSONPathNode_Free(jpn);
 
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     Node_Free(joval);
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1292,27 +1292,27 @@ error:
  * `path` defaults to root if not provided.
  * Reply: Integer, specifically the string's new length.
  */
-int JSONStrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONStrAppend_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 3) || (argc > 4)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (4 == argc ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (4 == argc ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -1332,9 +1332,9 @@ int JSONStrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
     // JSON must be valid
     size_t jsonlen;
-    const char *json = RedisModule_StringPtrLen(argv[(4 == argc ? 3 : 2)], &jsonlen);
+    const char *json = ValkeyModule_StringPtrLen(argv[(4 == argc ? 3 : 2)], &jsonlen);
     if (!jsonlen) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_EMPTY_STRING);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_EMPTY_STRING);
         goto error;
     }
 
@@ -1343,11 +1343,11 @@ int JSONStrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     char *jerr = NULL;
     if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, json, jsonlen, &jo, &jerr)) {
         if (jerr) {
-            RedisModule_ReplyWithError(ctx, jerr);
-            RedisModule_Free(jerr);
+            ValkeyModule_ReplyWithError(ctx, jerr);
+            ValkeyModule_Free(jerr);
         } else {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
         }
         goto error;
     }
@@ -1356,22 +1356,22 @@ int JSONStrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     if (N_STRING != NODETYPE(jo)) {
         sds err = sdscatfmt(sdsempty(), "ERR wrong type of value - expected %s but found %s",
                             NodeTypeStr(N_STRING), NodeTypeStr(NODETYPE(jpn->n)));
-        RedisModule_ReplyWithError(ctx, err);
+        ValkeyModule_ReplyWithError(ctx, err);
         sdsfree(err);
     }
 
     // actually concatenate the strings
     Node_StringAppend(jpn->n, jo);
-    RedisModule_ReplyWithLongLong(ctx, (long long)Node_Length(jpn->n));
+    ValkeyModule_ReplyWithLongLong(ctx, (long long)Node_Length(jpn->n));
     Node_Free(jo);
     JSONPathNode_Free(jpn);
 
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1383,24 +1383,24 @@ error:
  *
  * Reply: Integer, specifically the array's new size
  */
-int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONArrInsert_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if (argc < 5) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
     if (PARSE_OK != NodeFromJSONPath(jt->root, argv[2], &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
@@ -1421,8 +1421,8 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
     // get the index
     long long index;
-    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &index)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+    if (VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[3], &index)) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
         goto error;
     }
 
@@ -1431,7 +1431,7 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
     // check for out of range
     if (index < 0 || index > Node_Length(jpn->n)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_OUTOFRANGE);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_OUTOFRANGE);
         goto error;
     }
 
@@ -1440,9 +1440,9 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     for (int i = 4; i < argc; i++) {
         // JSON must be valid
         size_t jsonlen;
-        const char *json = RedisModule_StringPtrLen(argv[i], &jsonlen);
+        const char *json = ValkeyModule_StringPtrLen(argv[i], &jsonlen);
         if (!jsonlen) {
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_EMPTY_STRING);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_EMPTY_STRING);
             Node_Free(sub);
             goto error;
         }
@@ -1453,11 +1453,11 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, json, jsonlen, &jo, &jerr)) {
             Node_Free(sub);
             if (jerr) {
-                RedisModule_ReplyWithError(ctx, jerr);
-                RedisModule_Free(jerr);
+                ValkeyModule_ReplyWithError(ctx, jerr);
+                ValkeyModule_Free(jerr);
             } else {
-                RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-                RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+                VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+                ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
             }
             goto error;
         }
@@ -1466,8 +1466,8 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         if (OBJ_OK != Node_ArrayAppend(sub, jo)) {
             Node_Free(jo);
             Node_Free(sub);
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_INSERT_SUBARRY);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_INSERT_SUBARRY);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_INSERT_SUBARRY);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INSERT_SUBARRY);
             goto error;
         }
     }
@@ -1475,44 +1475,44 @@ int JSONArrInsert_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     // insert the sub array to the target array
     if (OBJ_OK != Node_ArrayInsert(jpn->n, index, sub)) {
         Node_Free(sub);
-        RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_INSERT);
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INSERT);
+        VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_INSERT);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INSERT);
         goto error;
     }
 
-    RedisModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
+    ValkeyModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
     maybeClearPathCache(jt, jpn);
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /* JSON.ARRAPPEND <key> <path> <json> [<json> ...]
  * Append the `json` value(s) into the array at `path` after the last element in it.
  * Reply: Integer, specifically the array's new size
  */
-int JSONArrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONArrAppend_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if (argc < 4) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ | VALKEYMODULE_WRITE);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
     if (PARSE_OK != NodeFromJSONPath(jt->root, argv[2], &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
@@ -1536,9 +1536,9 @@ int JSONArrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     for (int i = 3; i < argc; i++) {
         // JSON must be valid
         size_t jsonlen;
-        const char *json = RedisModule_StringPtrLen(argv[i], &jsonlen);
+        const char *json = ValkeyModule_StringPtrLen(argv[i], &jsonlen);
         if (!jsonlen) {
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_EMPTY_STRING);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_EMPTY_STRING);
             Node_Free(sub);
             goto error;
         }
@@ -1549,11 +1549,11 @@ int JSONArrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, json, jsonlen, &jo, &jerr)) {
             Node_Free(sub);
             if (jerr) {
-                RedisModule_ReplyWithError(ctx, jerr);
-                RedisModule_Free(jerr);
+                ValkeyModule_ReplyWithError(ctx, jerr);
+                ValkeyModule_Free(jerr);
             } else {
-                RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-                RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+                VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+                ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
             }
             goto error;
         }
@@ -1562,8 +1562,8 @@ int JSONArrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         if (OBJ_OK != Node_ArrayAppend(sub, jo)) {
             Node_Free(jo);
             Node_Free(sub);
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_INSERT_SUBARRY);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_INSERT_SUBARRY);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_INSERT_SUBARRY);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INSERT_SUBARRY);
             goto error;
         }
     }
@@ -1571,20 +1571,20 @@ int JSONArrAppend_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     // insert the sub array to the target array
     if (OBJ_OK != Node_ArrayInsert(jpn->n, Node_Length(jpn->n), sub)) {
         Node_Free(sub);
-        RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_INSERT);
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INSERT);
+        VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_INSERT);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INSERT);
         goto error;
     }
 
-    RedisModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
+    ValkeyModule_ReplyWithLongLong(ctx, Node_Length(jpn->n));
     maybeClearPathCache(jt, jpn);
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1599,24 +1599,24 @@ error:
  *
  * Reply: Integer, specifically the position of the scalar value in the array or -1 if unfound.
  */
-int JSONArrIndex_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONArrIndex_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 4) || (argc > 6)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
     Object *jo = NULL;
     if (PARSE_OK != NodeFromJSONPath(jt->root, argv[2], &jpn)) {
@@ -1638,9 +1638,9 @@ int JSONArrIndex_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int
 
     // the JSON value to search for must be valid
     size_t jsonlen;
-    const char *json = RedisModule_StringPtrLen(argv[3], &jsonlen);
+    const char *json = ValkeyModule_StringPtrLen(argv[3], &jsonlen);
     if (!jsonlen) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_EMPTY_STRING);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_EMPTY_STRING);
         goto error;
     }
 
@@ -1648,11 +1648,11 @@ int JSONArrIndex_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int
     char *jerr = NULL;
     if (JSONOBJECT_OK != CreateNodeFromJSON(JSONCtx.joctx, json, jsonlen, &jo, &jerr)) {
         if (jerr) {
-            RedisModule_ReplyWithError(ctx, jerr);
-            RedisModule_Free(jerr);
+            ValkeyModule_ReplyWithError(ctx, jerr);
+            ValkeyModule_Free(jerr);
         } else {
-            RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_JSONOBJECT_ERROR);
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_JSONOBJECT_ERROR);
+            VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_JSONOBJECT_ERROR);
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_JSONOBJECT_ERROR);
         }
         goto error;
     }
@@ -1660,28 +1660,28 @@ int JSONArrIndex_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int
     // get start (inclusive) & stop (exlusive) indices
     long long start = 0, stop = 0;
     if (argc > 4) {
-        if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[4], &start)) {
-            RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+        if (VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[4], &start)) {
+            ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
             goto error;
         }
         if (argc > 5) {
-            if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[5], &stop)) {
-                RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+            if (VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[5], &stop)) {
+                ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
                 goto error;
             }
         }
     }
 
-    RedisModule_ReplyWithLongLong(ctx, Node_ArrayIndex(jpn->n, jo, (int)start, (int)stop));
+    ValkeyModule_ReplyWithLongLong(ctx, Node_ArrayIndex(jpn->n, jo, (int)start, (int)stop));
 
     JSONPathNode_Free(jpn);
     Node_Free(jo);
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
     if (jo) Node_Free(jo);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1694,27 +1694,27 @@ error:
  *
  * Reply: Bulk String, specifically the popped JSON value.
  */
-int JSONArrPop_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONArrPop_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if ((argc < 2) || (argc > 4)) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
-    RedisModuleString *spath =
-        (argc > 2 ? argv[2] : RedisModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
+    ValkeyModuleString *spath =
+        (argc > 2 ? argv[2] : ValkeyModule_CreateString(ctx, OBJECT_ROOT_PATH, 1));
     if (PARSE_OK != NodeFromJSONPath(jt->root, spath, &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
         goto error;
@@ -1735,14 +1735,14 @@ int JSONArrPop_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int a
     // nothing to do
     long long len = Node_Length(jpn->n);
     if (!len) {
-        RedisModule_ReplyWithNull(ctx);
+        ValkeyModule_ReplyWithNull(ctx);
         goto ok;
     }
 
     // get the index
     long long index = -1;
-    if (argc > 3 && REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &index)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+    if (argc > 3 && VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[3], &index)) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
         goto error;
     }
 
@@ -1761,8 +1761,8 @@ int JSONArrPop_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int a
     // check whether serialization had succeeded
     if (!sdslen(json)) {
         sdsfree(json);
-        RM_LOG_WARNING(ctx, "%s", REJSON_ERROR_SERIALIZE);
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_SERIALIZE);
+        VKM_LOG_WARNING(ctx, "%s", VALKEYJSON_ERROR_SERIALIZE);
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_SERIALIZE);
         goto error;
     }
 
@@ -1770,17 +1770,17 @@ int JSONArrPop_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int a
     Node_ArrayDelRange(jpn->n, index, 1);
 
     // reply with the serialization
-    RedisModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
+    ValkeyModule_ReplyWithStringBuffer(ctx, json, sdslen(json));
     sdsfree(json);
 
 ok:
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
 /**
@@ -1794,24 +1794,24 @@ error:
  *
  * Reply: Integer, specifically the array's new size.
  */
-int JSONArrTrim_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONArrTrim_ValkeyCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // check args
     if (argc != 5) {
-        RedisModule_WrongArity(ctx);
-        return REDISMODULE_ERR;
+        ValkeyModule_WrongArity(ctx);
+        return VALKEYMODULE_ERR;
     }
-    RedisModule_AutoMemory(ctx);
+    ValkeyModule_AutoMemory(ctx);
 
     // key can't be empty and must be a JSON type
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-    int type = RedisModule_KeyType(key);
-    if (REDISMODULE_KEYTYPE_EMPTY == type || RedisModule_ModuleTypeGetType(key) != JSONType) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
+    ValkeyModuleKey *key = ValkeyModule_OpenKey(ctx, argv[1], VALKEYMODULE_READ);
+    int type = ValkeyModule_KeyType(key);
+    if (VALKEYMODULE_KEYTYPE_EMPTY == type || ValkeyModule_ModuleTypeGetType(key) != JSONType) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYMODULE_ERRORMSG_WRONGTYPE);
+        return VALKEYMODULE_ERR;
     }
 
     // validate path
-    JSONType_t *jt = RedisModule_ModuleTypeGetValue(key);
+    JSONType_t *jt = ValkeyModule_ModuleTypeGetValue(key);
     JSONPathNode_t *jpn = NULL;
     if (PARSE_OK != NodeFromJSONPath(jt->root, argv[2], &jpn)) {
         ReplyWithSearchPathError(ctx, jpn);
@@ -1833,12 +1833,12 @@ int JSONArrTrim_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     // get start & stop
     long long start, stop, left, right;
     long long len = (long long)Node_Length(jpn->n);
-    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &start)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+    if (VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[3], &start)) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
         goto error;
     }
-    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[4], &stop)) {
-        RedisModule_ReplyWithError(ctx, REJSON_ERROR_INDEX_INVALID);
+    if (VALKEYMODULE_OK != ValkeyModule_StringToLongLong(argv[4], &stop)) {
+        ValkeyModule_ReplyWithError(ctx, VALKEYJSON_ERROR_INDEX_INVALID);
         goto error;
     }
 
@@ -1860,188 +1860,188 @@ int JSONArrTrim_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     Node_ArrayDelRange(jpn->n, 0, left);
     Node_ArrayDelRange(jpn->n, -right, right);
 
-    RedisModule_ReplyWithLongLong(ctx, (long long)Node_Length(jpn->n));
+    ValkeyModule_ReplyWithLongLong(ctx, (long long)Node_Length(jpn->n));
     maybeClearPathCache(jt, jpn);
     JSONPathNode_Free(jpn);
-    RedisModule_ReplicateVerbatim(ctx);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplicateVerbatim(ctx);
+    return VALKEYMODULE_OK;
 
 error:
     JSONPathNode_Free(jpn);
-    return REDISMODULE_ERR;
+    return VALKEYMODULE_ERR;
 }
 
-int JSONCacheInfoCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONCacheInfoCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // Just dump and return the Cache Info
-    RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
+    ValkeyModule_ReplyWithArray(ctx, VALKEYMODULE_POSTPONED_ARRAY_LEN);
     size_t numElems = 0;
 
-    RedisModule_ReplyWithSimpleString(ctx, "bytes");
-    RedisModule_ReplyWithLongLong(ctx, REJSON_LRUCACHE_GLOBAL->numBytes);
+    ValkeyModule_ReplyWithSimpleString(ctx, "bytes");
+    ValkeyModule_ReplyWithLongLong(ctx, VALKEYJSON_LRUCACHE_GLOBAL->numBytes);
     numElems += 2;
 
-    RedisModule_ReplyWithSimpleString(ctx, "items");
-    RedisModule_ReplyWithLongLong(ctx, REJSON_LRUCACHE_GLOBAL->numEntries);
+    ValkeyModule_ReplyWithSimpleString(ctx, "items");
+    ValkeyModule_ReplyWithLongLong(ctx, VALKEYJSON_LRUCACHE_GLOBAL->numEntries);
     numElems += 2;
 
-    RedisModule_ReplyWithSimpleString(ctx, "max_bytes");
-    RedisModule_ReplyWithLongLong(ctx, REJSON_LRUCACHE_GLOBAL->maxBytes);
+    ValkeyModule_ReplyWithSimpleString(ctx, "max_bytes");
+    ValkeyModule_ReplyWithLongLong(ctx, VALKEYJSON_LRUCACHE_GLOBAL->maxBytes);
     numElems += 2;
 
-    RedisModule_ReplyWithSimpleString(ctx, "max_entries");
-    RedisModule_ReplyWithLongLong(ctx, REJSON_LRUCACHE_GLOBAL->maxEntries);
+    ValkeyModule_ReplyWithSimpleString(ctx, "max_entries");
+    ValkeyModule_ReplyWithLongLong(ctx, VALKEYJSON_LRUCACHE_GLOBAL->maxEntries);
     numElems += 2;
 
-    RedisModule_ReplyWithSimpleString(ctx, "min_size");
-    RedisModule_ReplyWithLongLong(ctx, REJSON_LRUCACHE_GLOBAL->minSize);
+    ValkeyModule_ReplyWithSimpleString(ctx, "min_size");
+    ValkeyModule_ReplyWithLongLong(ctx, VALKEYJSON_LRUCACHE_GLOBAL->minSize);
 
     numElems += 2;
-    RedisModule_ReplySetArrayLength(ctx, numElems);
-    return REDISMODULE_OK;
+    ValkeyModule_ReplySetArrayLength(ctx, numElems);
+    return VALKEYMODULE_OK;
 }
 
-int JSONCacheInitCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int JSONCacheInitCommand(ValkeyModuleCtx *ctx, ValkeyModuleString **argv, int argc) {
     // Initialize the cache settings. This is temporary and used for tests
     long long maxByte = LRUCACHE_DEFAULT_MAXBYTE, maxEnt = LRUCACHE_DEFAULT_MAXENT,
               minSize = LRUCACHE_DEFAULT_MINSIZE;
     if (argc == 4) {
-        if (RMUtil_ParseArgs(argv, argc, 1, "lll", &maxByte, &maxEnt, &minSize) != REDISMODULE_OK) {
-            return RedisModule_ReplyWithError(ctx, "Bad arguments");
+        if (VKMUtil_ParseArgs(argv, argc, 1, "lll", &maxByte, &maxEnt, &minSize) != VALKEYMODULE_OK) {
+            return ValkeyModule_ReplyWithError(ctx, "Bad arguments");
         }
     } else if (argc != 1) {
-        return RedisModule_ReplyWithError(ctx, "USAGE: [MAXBYTES, MAXENTS, MINSIZE]");
+        return ValkeyModule_ReplyWithError(ctx, "USAGE: [MAXBYTES, MAXENTS, MINSIZE]");
     }
 
-    REJSON_LRUCACHE_GLOBAL->maxBytes = maxByte;
-    REJSON_LRUCACHE_GLOBAL->maxEntries = maxEnt;
-    REJSON_LRUCACHE_GLOBAL->minSize = minSize;
-    return RedisModule_ReplyWithSimpleString(ctx, "OK");
+    VALKEYJSON_LRUCACHE_GLOBAL->maxBytes = maxByte;
+    VALKEYJSON_LRUCACHE_GLOBAL->maxEntries = maxEnt;
+    VALKEYJSON_LRUCACHE_GLOBAL->minSize = minSize;
+    return ValkeyModule_ReplyWithSimpleString(ctx, "OK");
 }
 
 /* Creates the module's commands. */
-int Module_CreateCommands(RedisModuleCtx *ctx) {
+int Module_CreateCommands(ValkeyModuleCtx *ctx) {
     /* Generic JSON type commands. */
-    if (RedisModule_CreateCommand(ctx, "json.resp", JSONResp_RedisCommand, "readonly", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.resp", JSONResp_ValkeyCommand, "readonly", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.debug", JSONDebug_RedisCommand, "readonly getkeys-api",
-                                  1, 1, 1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.debug", JSONDebug_ValkeyCommand, "readonly getkeys-api",
+                                  1, 1, 1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.type", JSONType_RedisCommand, "readonly", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.type", JSONType_ValkeyCommand, "readonly", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.set", JSONSet_RedisCommand, "write deny-oom", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.set", JSONSet_ValkeyCommand, "write deny-oom", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.get", JSONGet_RedisCommand, "readonly", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.get", JSONGet_ValkeyCommand, "readonly", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.mget", JSONMGet_RedisCommand, "readonly getkeys-api",
-                                  1, 1, 1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.mget", JSONMGet_ValkeyCommand, "readonly getkeys-api",
+                                  1, 1, 1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.del", JSONDel_RedisCommand, "write", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.del", JSONDel_ValkeyCommand, "write", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.forget", JSONDel_RedisCommand, "write", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.forget", JSONDel_ValkeyCommand, "write", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
     /* JSON number commands. */
-    if (RedisModule_CreateCommand(ctx, "json.numincrby", JSONNum_GenericCommand, "write", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.numincrby", JSONNum_GenericCommand, "write", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.nummultby", JSONNum_GenericCommand, "write", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.nummultby", JSONNum_GenericCommand, "write", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
     /* JSON string commands. */
-    if (RedisModule_CreateCommand(ctx, "json.strlen", JSONLen_GenericCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.strlen", JSONLen_GenericCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.strappend", JSONStrAppend_RedisCommand,
-                                  "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.strappend", JSONStrAppend_ValkeyCommand,
+                                  "write deny-oom", 1, 1, 1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
     /* JSON array commands matey. */
-    if (RedisModule_CreateCommand(ctx, "json.arrlen", JSONLen_GenericCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrlen", JSONLen_GenericCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.arrinsert", JSONArrInsert_RedisCommand,
-                                  "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrinsert", JSONArrInsert_ValkeyCommand,
+                                  "write deny-oom", 1, 1, 1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.arrappend", JSONArrAppend_RedisCommand,
-                                  "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrappend", JSONArrAppend_ValkeyCommand,
+                                  "write deny-oom", 1, 1, 1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.arrindex", JSONArrIndex_RedisCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrindex", JSONArrIndex_ValkeyCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.arrpop", JSONArrPop_RedisCommand, "write", 1, 1, 1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrpop", JSONArrPop_ValkeyCommand, "write", 1, 1, 1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.arrtrim", JSONArrTrim_RedisCommand, "write", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.arrtrim", JSONArrTrim_ValkeyCommand, "write", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
     /* JSON object commands. */
-    if (RedisModule_CreateCommand(ctx, "json.objlen", JSONLen_GenericCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.objlen", JSONLen_GenericCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json.objkeys", JSONObjKeys_RedisCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json.objkeys", JSONObjKeys_ValkeyCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "json._cacheinfo", JSONCacheInfoCommand, "readonly", 1, 1,
-                                  1) == REDISMODULE_ERR) {
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json._cacheinfo", JSONCacheInfoCommand, "readonly", 1, 1,
+                                  1) == VALKEYMODULE_ERR) {
+        return VALKEYMODULE_ERR;
     }
-    if (RedisModule_CreateCommand(ctx, "json._cacheinit", JSONCacheInitCommand, "write", 1, 1, 1) ==
-        REDISMODULE_ERR) {
-        return REDISMODULE_ERR;
+    if (ValkeyModule_CreateCommand(ctx, "json._cacheinit", JSONCacheInitCommand, "write", 1, 1, 1) ==
+        VALKEYMODULE_ERR) {
+        return VALKEYMODULE_ERR;
     }
 
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx) {
+int ValkeyModule_OnLoad(ValkeyModuleCtx *ctx) {
     // Register the module
-    if (RedisModule_Init(ctx, RLMODULE_NAME, REJSON_MODULE_VERSION, REDISMODULE_APIVER_1) ==
-        REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    if (ValkeyModule_Init(ctx, VKMODULE_NAME, VALKEYJSON_MODULE_VERSION, VALKEYMODULE_APIVER_1) ==
+        VALKEYMODULE_ERR)
+        return VALKEYMODULE_ERR;
 
     // Register the JSON data type
-    RedisModuleTypeMethods tm = {.version = REDISMODULE_TYPE_METHOD_VERSION,
+    ValkeyModuleTypeMethods tm = {.version = VALKEYMODULE_TYPE_METHOD_VERSION,
                                  .rdb_load = JSONTypeRdbLoad,
                                  .rdb_save = JSONTypeRdbSave,
                                  .aof_rewrite = JSONTypeAofRewrite,
                                  .mem_usage = JSONTypeMemoryUsage,
                                  .free = JSONTypeFree};
-    JSONType = RedisModule_CreateDataType(ctx, JSONTYPE_NAME, JSONTYPE_ENCODING_VERSION, &tm);
-    if (NULL == JSONType) return REDISMODULE_ERR;
+    JSONType = ValkeyModule_CreateDataType(ctx, JSONTYPE_NAME, JSONTYPE_ENCODING_VERSION, &tm);
+    if (NULL == JSONType) return VALKEYMODULE_ERR;
 
     // Initialize the module's context
     JSONCtx = (ModuleCtx){0};
     JSONCtx.joctx = NewJSONObjectCtx(0);
 
     // Create the commands
-    if (REDISMODULE_ERR == Module_CreateCommands(ctx)) return REDISMODULE_ERR;
+    if (VALKEYMODULE_ERR == Module_CreateCommands(ctx)) return VALKEYMODULE_ERR;
 
-    RM_LOG_WARNING(ctx, "%s v%d.%d.%d [encver %d]", RLMODULE_DESC, REJSON_VERSION_MAJOR,
-                   REJSON_VERSION_MINOR, REJSON_VERSION_PATCH, JSONTYPE_ENCODING_VERSION);
+    VKM_LOG_WARNING(ctx, "%s v%d.%d.%d [encver %d]", VKMODULE_DESC, VALKEYJSON_VERSION_MAJOR,
+                    VALKEYJSON_VERSION_MINOR, VALKEYJSON_VERSION_PATCH, JSONTYPE_ENCODING_VERSION);
 
-    return REDISMODULE_OK;
+    return VALKEYMODULE_OK;
 }

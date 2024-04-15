@@ -21,12 +21,12 @@
 #include "object.h"
 #include "object_type.h"
 #include "json_object.h"
-#include "redismodule.h"
+#include "valkeymodule.h"
 
 #define JSONTYPE_ENCODING_VERSION 0
-#define JSONTYPE_NAME "ReJSON-RL"
+#define JSONTYPE_NAME "ValkeyJSON"
 
-#define RM_LOGLEVEL_WARNING "warning"
+#define VKM_LOGLEVEL_WARNING "warning"
 
 #define OBJECT_ROOT_PATH "."
 
@@ -38,9 +38,9 @@ typedef struct JSONType_t {
     struct LruPathEntry *lruEntries;
 } JSONType_t;
 
-void *JSONTypeRdbLoad(RedisModuleIO *rdb, int encver);
-void JSONTypeRdbSave(RedisModuleIO *rdb, void *value);
-void JSONTypeAofRewrite(RedisModuleIO *aof, RedisModuleString *key, void *value);
+void *JSONTypeRdbLoad(ValkeyModuleIO *rdb, int encver);
+void JSONTypeRdbSave(ValkeyModuleIO *rdb, void *value);
+void JSONTypeAofRewrite(ValkeyModuleIO *aof, ValkeyModuleString *key, void *value);
 void JSONTypeFree(void *value);
 size_t JSONTypeMemoryUsage(const void *value);
 

@@ -1,5 +1,5 @@
 /*
- * ReJSON - a JSON data type for Redis
+ * ValkeyJSON - a JSON data type for Valkey
  * Copyright (C) 2017 Redis Labs
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 /**
  * LRU Entry, per path. Stored under keys
  */
-#include "rejson.h"
+#include "valkeyjson.h"
 #include <sds.h>
 typedef struct LruPathEntry {
     // Prev/Next in the LRU itself
@@ -62,7 +62,7 @@ typedef struct {
 #define LRUCACHE_DEFAULT_MAXENT 20000
 
 extern LruCache jsonLruCache_g;
-#define REJSON_LRUCACHE_GLOBAL (&jsonLruCache_g)
+#define VALKEYJSON_LRUCACHE_GLOBAL (&jsonLruCache_g)
 
 /**
  * Get the value from the LRU cache. This renews the entry within the LRU

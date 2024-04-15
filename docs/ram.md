@@ -1,11 +1,11 @@
-# ReJSON RAM Usage
+# ValkeyJSON RAM Usage
 
-Every key in Redis takes memory and requires at least the amount of RAM to store the key name, as
-well as some per-key overhead that Redis uses. On top of that, the value in the key also requires
+Every key in Valkey takes memory and requires at least the amount of RAM to store the key name, as
+well as some per-key overhead that Valkey uses. On top of that, the value in the key also requires
 RAM.
 
-ReJSON stores JSON values as binary data after deserializing them. This representation is often more
-expensive, size-wize, than the serialized form. The ReJSON data type uses at least 24 bytes (on
+ValkeyJSON stores JSON values as binary data after deserializing them. This representation is often more
+expensive, size-wize, than the serialized form. The ValkeyJSON data type uses at least 24 bytes (on
 64-bit architectures) for every value, as can be seen by sampling an empty string with the
 [`JSON.DEBUG MEMORY`](commands.md#jsondebug) command:
 
@@ -84,16 +84,16 @@ OK
 ```
 
 This table gives the size (in bytes) of a few of the test files on disk and when stored using
-ReJSON. The _MessagePack_ column is for reference purposes and reflects the length of the value
+ValkeyJSON. The _MessagePack_ column is for reference purposes and reflects the length of the value
 when stored using MessagePack.
 
-| File                                   | Filesize  | ReJSON | MessagePack |
-| -------------------------------------- | --------- | ------ | ----------- |
-| /test/files/pass-100.json              | 380       | 1079   | 140         |
-| /test/files/pass-jsonsl-1.json         | 1441      | 3666   | 753         |
-| /test/files/pass-json-parser-0000.json | 3468      | 7209   | 2393        |
-| /test/files/pass-jsonsl-yahoo2.json    | 18446     | 37469  | 16869       |
-| /test/files/pass-jsonsl-yelp.json      | 39491     | 75341  | 35469       |
+| File                                   | Filesize  | ValkeyJSON | MessagePack |
+| -------------------------------------- | --------- | ---------- | ----------- |
+| /test/files/pass-100.json              | 380       | 1079       | 140         |
+| /test/files/pass-jsonsl-1.json         | 1441      | 3666       | 753         |
+| /test/files/pass-json-parser-0000.json | 3468      | 7209       | 2393        |
+| /test/files/pass-jsonsl-yahoo2.json    | 18446     | 37469      | 16869       |
+| /test/files/pass-jsonsl-yelp.json      | 39491     | 75341      | 35469       |
 
 > Note: In the current version, deleting values from containers **does not** free the container's
 allocated memory.

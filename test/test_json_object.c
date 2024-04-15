@@ -423,7 +423,7 @@ MU_TEST_SUITE(test_object_to_json) {
 }
 
 int main(int argc, char *argv[]) {
-    RMUtil_InitAlloc();
+    VKMUtil_InitAlloc();
     MU_RUN_SUITE(test_json_literals);
     MU_RUN_SUITE(test_json_object);
     MU_RUN_SUITE(test_object_to_json);

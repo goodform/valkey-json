@@ -21,15 +21,15 @@
 #include <string.h>
 #include <vector.h>
 #include "object.h"
-#include "redismodule.h"
+#include "valkeymodule.h"
 
-/* Custom Redis data type API. */
-void *ObjectTypeRdbLoad(RedisModuleIO *rdb);
-void ObjectTypeRdbSave(RedisModuleIO *rdb, void *value);
+/* Custom Valkey data type API. */
+void *ObjectTypeRdbLoad(ValkeyModuleIO *rdb);
+void ObjectTypeRdbSave(ValkeyModuleIO *rdb, void *value);
 void ObjectTypeFree(void *value);
 
 /* Replies with a RESP representation of the node. */
-void ObjectTypeToRespReply(RedisModuleCtx *ctx, const Node *node);
+void ObjectTypeToRespReply(ValkeyModuleCtx *ctx, const Node *node);
 
 /* Reports the memory usage (in bytes) of the node. */
 size_t ObjectTypeMemoryUsage(const void *value);

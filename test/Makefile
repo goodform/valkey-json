@@ -1,6 +1,6 @@
-#set environment variable RM_INCLUDE_DIR to the location of redismodule.h
-ifndef RM_INCLUDE_DIR
-	RM_INCLUDE_DIR=$(shell pwd)/../src
+#set environment variable VKM_INCLUDE_DIR to the location of redismodule.h
+ifndef VKM_INCLUDE_DIR
+	VKM_INCLUDE_DIR=$(shell pwd)/../src
 endif
 
 DEPS_DIR=$(shell pwd)/../deps
@@ -16,7 +16,7 @@ endif
 
 # find the OS
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
-INCLUDE_DIRS = -I"$(RM_INCLUDE_DIR)" -I"$(DEPS_DIR)/jsonsl"  -I"$(DEPS_DIR)/RedisModuleSDK/rmutil"
+INCLUDE_DIRS = -I"$(VKM_INCLUDE_DIR)" -I"$(DEPS_DIR)/jsonsl" -I"$(DEPS_DIR)/ValkeyModuleSDK/vkmutil"
 CFLAGS =  $(INCLUDE_DIRS) -Wall $(DEBUGFLAGS)  -std=gnu99 -D_GNU_SOURCE
 CC:=$(shell sh -c 'type $(CC) >/dev/null 2>/dev/null && echo $(CC) || echo gcc')
 
@@ -33,7 +33,7 @@ test: test_object test_json_object test_json_validator unittest
 build: object json_object json_validator
 
 # Dependency libraries
-LIBS = $(RM_INCLUDE_DIR)/librejson.a $(DEPS_DIR)/RedisModuleSDK/rmutil/librmutil.a $(DEPS_DIR)/jsonsl/libjsonsl.a -lm
+LIBS = $(VKM_INCLUDE_DIR)/libvalkeyjson.a $(DEPS_DIR)/ValkeyModuleSDK/vkmutil/libvkmutil.a $(DEPS_DIR)/jsonsl/libjsonsl.a -lm
 # Compile flags for linux / osx
 ifeq ($(uname_S),Linux)
 	LIBS += -lrt

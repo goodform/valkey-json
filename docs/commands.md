@@ -1,14 +1,14 @@
-# ReJSON Commands
+# ValkeyJSON Commands
 
 ## Overview
 
 ### Supported JSON
 
-ReJSON aims to provide full support for [ECMA-404 The JSON Data Interchange Standard](http://json.org/).
+ValkeyJSON aims to provide full support for [ECMA-404 The JSON Data Interchange Standard](http://json.org/).
 
 Below, the term _JSON Value_ refers to any of the valid values. A _Container_ is either a _JSON Array_ or a _JSON Object_. A _JSON Scalar_ is a _JSON Number_, a _JSON String_ or a literal (_JSON False_, _JSON True_ or _JSON Null_).
 
-### ReJSON API
+### ValkeyJSON API
 
 Each of the module's commands is described below. Each section
 header shows the syntax for the command, where:
@@ -42,7 +42,7 @@ JSON.DEL <key> [path]
 
 Delete a value.
 
-`path` defaults to root if not provided. Non-existing keys and paths are ignored. Deleting an object's root is equivalent to deleting the key from Redis.
+`path` defaults to root if not provided. Non-existing keys and paths are ignored. Deleting an object's root is equivalent to deleting the key from Valkey.
 
 ### Return value
 
@@ -130,9 +130,9 @@ JSON.SET <key> <path> <json>
 
 Sets the JSON value at `path` in `key`
 
-For new Redis keys the `path` must be the root. For existing keys, when the entire `path` exists, the value that it contains is replaced with the `json` value.
+For new Valkey keys the `path` must be the root. For existing keys, when the entire `path` exists, the value that it contains is replaced with the `json` value.
 
-A key (with its respective value) is added to a JSON Object (in a Redis ReJSON data type key) if and only if it is the last child in the `path`. The optional subcommands modify this behavior for both new Redis ReJSON data type keys as well as the JSON Object keys in them:
+A key (with its respective value) is added to a JSON Object (in a ValkeyJSON data type key) if and only if it is the last child in the `path`. The optional subcommands modify this behavior for both new ValkeyJSON data type keys as well as the JSON Object keys in them:
 
 *   `NX` - only set the key if it does not already exist
 *   `XX` - only set the key if it already exists
@@ -453,7 +453,7 @@ JSON.RESP <key> [path]
 
 ### Description
 
-Return the JSON in `key` in [Redis Serialization Protocol (RESP)][5].
+Return the JSON in `key` in [RESP format)][5].
 
 `path` defaults to root if not provided. This command uses the following mapping from JSON to RESP:
 -   JSON Null is mapped to the [RESP Null Bulk String][5]

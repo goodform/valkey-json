@@ -1,8 +1,6 @@
-[![CircleCI](https://circleci.com/gh/goodform/rejson/tree/master.svg?style=svg)](https://circleci.com/gh/goodform/rejson/tree/master)
+# ValkeyJSON - a JSON data type for Valkey
 
-# ReJSON - a JSON data type for Redis
-
-ReJSON is a [Redis](http://redis.io/) module that implements [ECMA-404 The JSON Data Interchange Standard](http://json.org/) as a native data type. It allows storing, updating and fetching JSON values from Redis keys (documents).
+ValkeyJSON is a [Valkey](http://valkey.io/) module that implements [ECMA-404 The JSON Data Interchange Standard](http://json.org/) as a native data type. It allows storing, updating and fetching JSON values from Valkey keys (documents).
 
 Primary features:
 
@@ -13,14 +11,12 @@ Primary features:
 
 ## Quickstart
 
-1.  [Launch ReJSON with Docker](https://goodform.github.io/rejson/#launch-rejson-with-docker)
-1.  [Use ReJSON from **any** Redis client](https://goodform.github.io/rejson/#using-rejson), e.g.:
-
-![ReJSON with `redis-cli`](docs/images/demo.gif)
+1.  [Launch ValkeyJSON with Docker](https://valkey-io.github.io/valkey-json/#launch-valkeyjson-with-docker)
+2.  [Use ValkeyJSON from a Valkey client](https://valkey-io/valkey-json/#using-valkeyjson)
 
 ## Documentation
 
-Read the docs at https://goodform.github.io/rejson
+Read the docs at https://valkey-io.github.io/valkey-json
 
 ## Current limitations and known issues
 
@@ -30,10 +26,10 @@ Read the docs at https://goodform.github.io/rejson
 
 ## Acknowledgements
 
-ReJSON is made possible only because of the existance of these amazing open source projects:
+ValkeyJSON is made possible only because of the existance of these amazing open source projects:
 
 * [jsonsl](https://github.com/mnunberg/jsonsl)
-* [redis](https://github.com/antirez/redis)
+* [valkey](https://github.com/valkey-io/valkey)
 
 ## License
 

@@ -26,8 +26,8 @@
 #include <sds.h>
 #include <stdlib.h>
 #include "object.h"
-#include "rmstrndup.h"
-#include "redismodule.h"
+#include "vkmstrndup.h"
+#include "valkeymodule.h"
 
 #define JSONOBJECT_OK 0
 #define JSONOBJECT_ERROR 1

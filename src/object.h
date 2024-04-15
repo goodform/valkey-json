@@ -24,8 +24,8 @@
 #include <string.h>
 #include <sys/param.h>
 #include <vector.h>
-#include "redismodule.h"
-#include "rmstrndup.h"
+#include "valkeymodule.h"
+#include "vkmstrndup.h"
 
 // Return code from successful ops
 #define OBJ_OK 0

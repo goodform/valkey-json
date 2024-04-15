@@ -404,7 +404,7 @@ MU_TEST_SUITE(test_object) {
 }
 
 int main(int argc, char *argv[]) {
-    RMUtil_InitAlloc();
+    VKMUtil_InitAlloc();
     MU_RUN_SUITE(test_object);
     MU_REPORT();
     return minunit_fail;

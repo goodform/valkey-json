@@ -1,17 +1,17 @@
-FROM redis:latest as builder
+FROM valkey:latest as builder
 
-ENV LIBDIR /usr/lib/redis/modules
+ENV LIBDIR /usr/lib/valkey/modules
 ENV DEPS "python python-setuptools python-pip wget unzip build-essential"
 # Set up a build environment
 RUN set -ex;\
     deps="$DEPS";\
     apt-get update; \
 	apt-get install -y --no-install-recommends $deps;\
-    pip install rmtest;
+    pip install vkmtest;
 
 # Build the source
-ADD . /REJSON
-WORKDIR /REJSON
+ADD . /VALKEYJSON
+WORKDIR /VALKEYJSON
 RUN set -ex;\
     make clean; \
     deps="$DEPS";\
@@ -19,11 +19,11 @@ RUN set -ex;\
     make test;
 
 # Package the runner
-FROM redis:latest
-ENV LIBDIR /usr/lib/redis/modules
+FROM valkey:latest
+ENV LIBDIR /usr/lib/valkey/modules
 WORKDIR /data
 RUN set -ex;\
     mkdir -p "$LIBDIR";
-COPY --from=builder /REJSON/src/rejson.so "$LIBDIR"
+COPY --from=builder /VALKEYJSON/src/valkeyjson.so "$LIBDIR"
 
-CMD ["redis-server", "--loadmodule", "/usr/lib/redis/modules/rejson.so"]
+CMD ["valkey-server", "--loadmodule", "/usr/lib/valkey/modules/valkeyjson.so"]

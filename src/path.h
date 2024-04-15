@@ -21,8 +21,8 @@
 #include <string.h>
 #include <sys/param.h>
 #include "object.h"
-#include "redismodule.h"
-#include "rmstrndup.h"
+#include "valkeymodule.h"
+#include "vkmstrndup.h"
 
 /* The type of a path node */
 typedef enum {

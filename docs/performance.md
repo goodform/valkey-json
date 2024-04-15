@@ -1,58 +1,58 @@
 # Performance
 
-To get an early sense of what ReJSON is capable of, you can test it with `redis-benchmark` just like
-any other Redis command. However, in order to have more control over the tests, we'll use a 
-a tool written in Go called _ReJSONBenchmark_ that we expect to release in the near future.
+To get an early sense of what ValkeyJSON is capable of, you can test it with `redis-benchmark` just like
+any other Valkey command. However, in order to have more control over the tests, we'll use a 
+a tool written in Go called _ValkeyJSONBenchmark_ that we expect to release in the near future.
 
-The following figures were obtained from an AWS EC2 c4.8xlarge instance that ran both the Redis
+The following figures were obtained from an AWS EC2 c4.8xlarge instance that ran both the Valkey
 server as well the as the benchmarking tool. Connections to the server are via the networking stack.
 All tests are non-pipelined.
 
-> NOTE: The results below are measured using the preview version of ReJSON, which is still very much
+> NOTE: The results below are measured using the preview version of ValkeyJSON, which is still very much
 unoptimized.
 
-## ReJSON baseline
+## ValkeyJSON baseline
 
 ### A smallish object
 
 We test a JSON value that, while purely synthetic, is interesting. The test subject is
-[/test/files/pass-100.json](https://github.com/goodform/rejson/blob/master/test/files/pass-100.json),
+[/test/files/pass-100.json](https://github.com/valkey-io/valkey-json/blob/master/test/files/pass-100.json),
 who weighs in at 380 bytes and is nested. We first test SETting it, then GETting it using several
 different paths:
 
-![ReJSONBenchmark pass-100.json](images/bench_pass_100.png)
+![ValkeyJSONBenchmark pass-100.json](images/bench_pass_100.png)
 
-![ReJSONBenchmark pass-100.json percentiles](images/bench_pass_100_p.png)
+![ValkeyJSONBenchmark pass-100.json percentiles](images/bench_pass_100_p.png)
 
 ### A bigger array
 
 Moving on to bigger values, we use the 1.4 kB array in
-[/test/files/pass-jsonsl-1.json](https://github.com/goodform/rejson/blob/master/test/files/pass-jsonsl-1.json):
+[/test/files/pass-jsonsl-1.json](https://github.com/valkey-io/valkey-json/blob/master/test/files/pass-jsonsl-1.json):
 
-![ReJSONBenchmark pass-jsonsl-1.json](images/bench_pass_jsonsl_1.png)
+![ValkeyJSONBenchmark pass-jsonsl-1.json](images/bench_pass_jsonsl_1.png)
 
-![ReJSONBenchmark pass-jsonsl-1.json percentiles](images/bench_pass_jsonsl_1_p.png)
+![ValkeyJSONBenchmark pass-jsonsl-1.json percentiles](images/bench_pass_jsonsl_1_p.png)
 
 ### A largish object
 
 More of the same to wrap up, now we'll take on a behemoth of no less than 3.5 kB as given by
-[/test/files/pass-json-parser-0000.json](https://github.com/goodform/rejson/blob/master/test/files/pass-json-parser-0000.json):
+[/test/files/pass-json-parser-0000.json](https://github.com/valkey-io/valkey-json/blob/master/test/files/pass-json-parser-0000.json):
 
-![ReJSONBenchmark pass-json-parser-0000.json](images/bench_pass_json_parser_0000.png)
+![ValkeyJSONBenchmark pass-json-parser-0000.json](images/bench_pass_json_parser_0000.png)
 
-![ReJSONBenchmark pass-json-parser-0000.json percentiles](images/bench_pass_json_parser_0000_p.png)
+![ValkeyJSONBenchmark pass-json-parser-0000.json percentiles](images/bench_pass_json_parser_0000_p.png)
 
 ### Number operations
 
 Last but not least, some adding and multiplying:
 
-![ReJSONBenchmark number operations](images/bench_numbers.png)
+![ValkeyJSONBenchmark number operations](images/bench_numbers.png)
 
-![ReJSONBenchmark number operations percentiles](images/bench_numbers_p.png)
+![ValkeyJSONBenchmark number operations percentiles](images/bench_numbers_p.png)
 
 ### Baseline
 
-To establish a baseline, we'll use the Redis [`PING`](https://redis.io/commands/ping) command.
+To establish a baseline, we'll use the Valkey [`PING`](https://redis.io/commands/ping) command.
 First, lets see what `redis-benchmark` reports:
 
 ```
@@ -68,43 +68,43 @@ First, lets see what `redis-benchmark` reports:
 140587.66 requests per second
 ```
 
-ReJSONBenchmark's concurrency is configurable, so we'll test a few settings to find a good one. Here
+ValkeyJSONBenchmark's concurrency is configurable, so we'll test a few settings to find a good one. Here
 are the results, which indicate that 16 workers yield the best throughput:
 
-![ReJSONBenchmark PING](images/bench_ping.png)
+![ValkeyJSONBenchmark PING](images/bench_ping.png)
 
-![ReJSONBenchmark PING percentiles](images/bench_ping_p.png)
+![ValkeyJSONBenchmark PING percentiles](images/bench_ping_p.png)
 
 Note how our benchmarking tool does slightly worse in PINGing - producing only 116K ops, compared to
 `redis-cli`'s 140K.
 
 ### The empty string
 
-Another ReJSON benchmark is that of setting and getting an empty string - a value that's only two
+Another ValkeyJSON benchmark is that of setting and getting an empty string - a value that's only two
 bytes long (i.e. `""`). Granted, that's not very useful, but it teaches us something about the basic
 performance of the module:
 
-![ReJSONBenchmark empty string](images/bench_empty_string.png)
+![ValkeyJSONBenchmark empty string](images/bench_empty_string.png)
 
-![ReJSONBenchmark empty string percentiles](images/bench_empty_string_p.png)
+![ValkeyJSONBenchmark empty string percentiles](images/bench_empty_string_p.png)
 
 ## Comparison vs. server-side Lua scripting
 
-We compare ReJSON's performance with Redis' embedded Lua engine. For this purpose, we use the Lua
-scripts at [/benchmarks/lua](https://github.com/goodform/rejson/tree/master/benchmarks/lua).
-These scripts provide ReJSON's GET and SET functionality on values stored in JSON or MessagePack
+We compare ValkeyJSON's performance with Valkey' embedded Lua engine. For this purpose, we use the Lua
+scripts at [/benchmarks/lua](https://github.com/valkey-io/valkey-json/tree/master/benchmarks/lua).
+These scripts provide ValkeyJSON's GET and SET functionality on values stored in JSON or MessagePack
 formats. Each of the different operations (set root, get root, set path and get path) is executed
 with each "engine" on objects of varying sizes. 
 
 ### Setting and getting the root
 
 Storing raw JSON performs best in this test, but that isn't really surprising as all it does is
-serve unprocessed strings. While you can and should use Redis for caching opaque data, and JSON
+serve unprocessed strings. While you can and should use Valkey for caching opaque data, and JSON
 "blobs" are just one example, this does not allow any updates other than these of the entire value.
 
-A more meaningful comparison therefore is between ReJSON and the MessagePack variant, since both
+A more meaningful comparison therefore is between ValkeyJSON and the MessagePack variant, since both
 process the incoming JSON value before actually storing it. While the rates and latencies of these 
-two behave in a very similar way, the absolute measurements suggest that ReJSON's performance may be
+two behave in a very similar way, the absolute measurements suggest that ValkeyJSON's performance may be
 further improved.
 
 ![VS. Lua set root](images/bench_lua_set_root.png)
@@ -117,8 +117,8 @@ further improved.
 
 ### Setting and getting parts of objects
 
-This test shows why ReJSON exists. Not only does it outperform the Lua variants, it retains constant
-rates and latencies regardless the object's overall size. There's no magic here - ReJSON keeps the
+This test shows why ValkeyJSON exists. Not only does it outperform the Lua variants, it retains constant
+rates and latencies regardless the object's overall size. There's no magic here - ValkeyJSON keeps the
 value deserialized so that accessing parts of it is a relatively inexpensive operation. In deep contrast
 are both raw JSON as well as MessagePack, which require decoding the entire object before anything can
 be done with it (a process that becomes more expensive the larger the object is).
@@ -159,7 +159,7 @@ These charts are more of the same but independent for each file (value):
 
 The following are the raw results from the benchmark in CSV format.
 
-### ReJSON results
+### ValkeyJSON results
 
 ```
 title,concurrency,rate,average latency,50.00%-tile,90.00%-tile,95.00%-tile,99.00%-tile,99.50%-tile,100.00%-tile

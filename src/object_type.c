@@ -19,7 +19,7 @@
 
 #define Vector_Last(v) Vector_Size(v) - 1
 
-void *ObjectTypeRdbLoad(RedisModuleIO *rdb) {
+void *ObjectTypeRdbLoad(ValkeyModuleIO *rdb) {
     // IMPORTANT: no encoding version check here, this is up to the calller
     Vector *nodes = NULL;
     Vector *indices = NULL;
@@ -35,7 +35,7 @@ void *ObjectTypeRdbLoad(RedisModuleIO *rdb) {
             case S_INIT:  // Initial state
                 nodes = NewVector(Node *, 1);
                 indices = NewVector(uint64_t, 1);
-                type = (NodeType)RedisModule_LoadUnsigned(rdb);
+                type = (NodeType)ValkeyModule_LoadUnsigned(rdb);
                 state = S_BEGIN_VALUE;
                 break;
             case S_BEGIN_VALUE:
@@ -45,42 +45,42 @@ void *ObjectTypeRdbLoad(RedisModuleIO *rdb) {
                         state = S_END_VALUE;
                         break;
                     case N_BOOLEAN:
-                        str = RedisModule_LoadStringBuffer(rdb, &strlen);
+                        str = ValkeyModule_LoadStringBuffer(rdb, &strlen);
                         node = NewBoolNode('1' == str[0]);
-                        RedisModule_Free(str);
+                        ValkeyModule_Free(str);
                         state = S_END_VALUE;
                         break;
                     case N_INTEGER:
-                        node = NewIntNode(RedisModule_LoadSigned(rdb));
+                        node = NewIntNode(ValkeyModule_LoadSigned(rdb));
                         state = S_END_VALUE;
                         break;
                     case N_NUMBER:
-                        node = NewDoubleNode(RedisModule_LoadDouble(rdb));
+                        node = NewDoubleNode(ValkeyModule_LoadDouble(rdb));
                         state = S_END_VALUE;
                         break;
                     case N_STRING:
-                        str = RedisModule_LoadStringBuffer(rdb, &strlen);
+                        str = ValkeyModule_LoadStringBuffer(rdb, &strlen);
                         node = NewStringNode(str, strlen);
-                        RedisModule_Free(str);
+                        ValkeyModule_Free(str);
                         state = S_END_VALUE;
                         break;
                     case N_KEYVAL:
-                        str = RedisModule_LoadStringBuffer(rdb, &strlen);
+                        str = ValkeyModule_LoadStringBuffer(rdb, &strlen);
                         node = NewKeyValNode(str, strlen, NULL);
                         Vector_Push(nodes, node);
                         Vector_Push(indices, (uint64_t)1);
-                        RedisModule_Free(str);
+                        ValkeyModule_Free(str);
                         state = S_CONTAINER;
                         break;
                     case N_DICT:
-                        len = RedisModule_LoadUnsigned(rdb);
+                        len = ValkeyModule_LoadUnsigned(rdb);
                         node = NewDictNode(len);
                         Vector_Push(nodes, node);
                         Vector_Push(indices, len);
                         state = S_CONTAINER;
                         break;
                     case N_ARRAY:
-                        len = RedisModule_LoadUnsigned(rdb);
+                        len = ValkeyModule_LoadUnsigned(rdb);
                         node = NewArrayNode(len);
                         Vector_Push(nodes, node);
                         Vector_Push(indices, len);
@@ -113,7 +113,7 @@ void *ObjectTypeRdbLoad(RedisModuleIO *rdb) {
                 Vector_Get(indices, Vector_Last(indices), &len);
                 if (len) {  // move to next child node
                     Vector_Put(indices, Vector_Last(indices), len - 1);
-                    type = (NodeType)RedisModule_LoadUnsigned(rdb);
+                    type = (NodeType)ValkeyModule_LoadUnsigned(rdb);
                     state = S_BEGIN_VALUE;
                 } else {
                     Vector_Pop(indices, NULL);
@@ -132,34 +132,34 @@ void *ObjectTypeRdbLoad(RedisModuleIO *rdb) {
 }
 
 void _ObjectTypeSave_Begin(Node *n, void *ctx) {
-    RedisModuleIO *rdb = (RedisModuleIO *)ctx;
+    ValkeyModuleIO *rdb = (ValkeyModuleIO *)ctx;
 
     // type is saved as uint64, but could be compressed to 1-2 bytes.
     if (!n) {
-        RedisModule_SaveUnsigned(rdb, N_NULL);
+        ValkeyModule_SaveUnsigned(rdb, N_NULL);
     } else {
-        RedisModule_SaveUnsigned(rdb, n->type);
+        ValkeyModule_SaveUnsigned(rdb, n->type);
         switch (n->type) {
             case N_BOOLEAN:
-                RedisModule_SaveStringBuffer(rdb, n->value.boolval ? "1" : "0", 1);
+                ValkeyModule_SaveStringBuffer(rdb, n->value.boolval ? "1" : "0", 1);
                 break;
             case N_INTEGER:
-                RedisModule_SaveSigned(rdb, n->value.intval);
+                ValkeyModule_SaveSigned(rdb, n->value.intval);
                 break;
             case N_NUMBER:
-                RedisModule_SaveDouble(rdb, n->value.numval);
+                ValkeyModule_SaveDouble(rdb, n->value.numval);
                 break;
             case N_STRING:
-                RedisModule_SaveStringBuffer(rdb, n->value.strval.data, n->value.strval.len);
+                ValkeyModule_SaveStringBuffer(rdb, n->value.strval.data, n->value.strval.len);
                 break;
             case N_KEYVAL:
-                RedisModule_SaveStringBuffer(rdb, n->value.kvval.key, strlen(n->value.kvval.key));
+                ValkeyModule_SaveStringBuffer(rdb, n->value.kvval.key, strlen(n->value.kvval.key));
                 break;
             case N_DICT:
-                RedisModule_SaveUnsigned(rdb, n->value.dictval.len);
+                ValkeyModule_SaveUnsigned(rdb, n->value.dictval.len);
                 break;
             case N_ARRAY:
-                RedisModule_SaveUnsigned(rdb, n->value.arrval.len);
+                ValkeyModule_SaveUnsigned(rdb, n->value.arrval.len);
                 break;
             case N_NULL:  // keeps the compiler from complaining
                 break;
@@ -167,7 +167,7 @@ void _ObjectTypeSave_Begin(Node *n, void *ctx) {
     }
 }
 
-void ObjectTypeRdbSave(RedisModuleIO *rdb, void *value) {
+void ObjectTypeRdbSave(ValkeyModuleIO *rdb, void *value) {
     Node *node = (Node *)value;
     NodeSerializerOpt nso = {0};
 
@@ -181,35 +181,35 @@ void ObjectTypeFree(void *value) {
 }
 
 void _ObjectTypeToResp_Begin(Node *n, void *ctx) {
-    RedisModuleCtx *rctx = (RedisModuleCtx *)ctx;
+    ValkeyModuleCtx *rctx = (ValkeyModuleCtx *)ctx;
 
     if (!n) {
-        RedisModule_ReplyWithNull(rctx);
+        ValkeyModule_ReplyWithNull(rctx);
     } else {
         switch (n->type) {
             case N_BOOLEAN:
-                RedisModule_ReplyWithSimpleString(rctx, n->value.boolval ? "true" : "false");
+                ValkeyModule_ReplyWithSimpleString(rctx, n->value.boolval ? "true" : "false");
                 break;
             case N_INTEGER:
-                RedisModule_ReplyWithLongLong(rctx, n->value.intval);
+                ValkeyModule_ReplyWithLongLong(rctx, n->value.intval);
                 break;
             case N_NUMBER:
-                RedisModule_ReplyWithDouble(rctx, n->value.numval);
+                ValkeyModule_ReplyWithDouble(rctx, n->value.numval);
                 break;
             case N_STRING:
-                RedisModule_ReplyWithStringBuffer(rctx, n->value.strval.data, n->value.strval.len);
+                ValkeyModule_ReplyWithStringBuffer(rctx, n->value.strval.data, n->value.strval.len);
                 break;
             case N_KEYVAL:
-                RedisModule_ReplyWithArray(rctx, 2);
-                RedisModule_ReplyWithStringBuffer(rctx, n->value.kvval.key, strlen(n->value.kvval.key));
+                ValkeyModule_ReplyWithArray(rctx, 2);
+                ValkeyModule_ReplyWithStringBuffer(rctx, n->value.kvval.key, strlen(n->value.kvval.key));
                 break;
             case N_DICT:
-                RedisModule_ReplyWithArray(rctx, n->value.dictval.len + 1);
-                RedisModule_ReplyWithSimpleString(rctx, "{");
+                ValkeyModule_ReplyWithArray(rctx, n->value.dictval.len + 1);
+                ValkeyModule_ReplyWithSimpleString(rctx, "{");
                 break;
             case N_ARRAY:
-                RedisModule_ReplyWithArray(rctx, n->value.arrval.len + 1);
-                RedisModule_ReplyWithSimpleString(rctx, "[");
+                ValkeyModule_ReplyWithArray(rctx, n->value.arrval.len + 1);
+                ValkeyModule_ReplyWithSimpleString(rctx, "[");
                 break;
             case N_NULL:  // keeps the compiler from complaining
                 break;
@@ -217,7 +217,7 @@ void _ObjectTypeToResp_Begin(Node *n, void *ctx) {
     }
 }
 
-void ObjectTypeToRespReply(RedisModuleCtx *ctx, const Node *node) {
+void ObjectTypeToRespReply(ValkeyModuleCtx *ctx, const Node *node) {
     NodeSerializerOpt nso = {0};
 
     nso.fBegin = _ObjectTypeToResp_Begin;

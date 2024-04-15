@@ -4,7 +4,7 @@ import argparse
 from urlparse import urlparse
 import os
 import redis
-from disposableredis import DisposableRedis
+from disposablevalkey import DisposableValkey
 
 # http://code.activestate.com/recipes/577081-humanized-representation-of-a-number-of-bytes/#c7
 def GetHumanReadable(size, precision=2):
@@ -18,9 +18,9 @@ def GetHumanReadable(size, precision=2):
 
 if __name__ == '__main__':
     # handle arguments
-    parser = argparse.ArgumentParser(description='ReJSON memory profiler', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='ValkeyJSON memory profiler', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('file', type=str, default=None, help='JSON filename')
-    parser.add_argument('-u', '--uri', type=str, default=None, help='Redis server URI')
+    parser.add_argument('-u', '--uri', type=str, default=None, help='Valkey server URI')
     parser.add_argument('-s', '--steps', type=int, default=5, help='number of steps')
     parser.add_argument('-c', '--count', type=int, default=1, help='initial count of documents')
     args = parser.parse_args()
@@ -31,9 +31,9 @@ if __name__ == '__main__':
 
     # initialize
     port = None
-    serverpath = os.path.abspath(os.path.join(os.getcwd(), '../../redis/src/redis-server'))
+    serverpath = os.path.abspath(os.path.join(os.getcwd(), '../../valkey/src/valkey-server'))
     serverargs = {
-        'loadmodule': os.path.abspath(os.path.join(os.getcwd(), '../lib/rejson.so')),
+        'loadmodule': os.path.abspath(os.path.join(os.getcwd(), '../lib/valkeyjson.so')),
         'save': '',
     }
 
@@ -47,13 +47,13 @@ if __name__ == '__main__':
     }
 
     # TODO make client connect to an existing instance
-    # client = DisposableRedis(port=port, path=serverpath, **serverargs)
+    # client = DisposableValkey(port=port, path=serverpath, **serverargs)
     r = redis.StrictRedis()
 
-    # Print file and ReJSON sizes
+    # Print file and ValkeyJSON sizes
     r.execute_command('JSON.SET', 'json', '.', json)
     print 'File size: {}'.format(GetHumanReadable(len(json)))
-    print 'As ReJSON: {}'.format(GetHumanReadable(r.execute_command('JSON.MEMORY', 'json')))
+    print 'As ValkeyJSON: {}'.format(GetHumanReadable(r.execute_command('JSON.MEMORY', 'json')))
     print
 
     # do the steps

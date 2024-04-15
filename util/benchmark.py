@@ -47,11 +47,11 @@ def runWorker(ctx):
     return rep
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='ReJSON Benchmark', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='ValkeyJSON Benchmark', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-c', '--count', type=int, default=100000, help='total number of operations')
     parser.add_argument('-p', '--pipeline', type=int, default=0, help='pipeline size')
     parser.add_argument('-w', '--workers', type=int, default=8, help='number of worker processes')
-    parser.add_argument('-u', '--uri', type=str, default='redis://localhost:6379', help='Redis server URI')
+    parser.add_argument('-u', '--uri', type=str, default='redis://localhost:6379', help='Valkey server URI')
     args = parser.parse_args()
     uri = urlparse(args.uri)
 
@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
     print
     print 'Count: {}, Workers: {}, Pipeline: {}'.format(args.count, args.workers, args.pipeline)
-    print 'Using hireds: {}'.format(redis.utils.HIREDIS_AVAILABLE)
+    print 'Using hiredis: {}'.format(redis.utils.HIREDIS_AVAILABLE)
     print 'Runtime: {} seconds'.format(round(s1, 2))
     print 'Throughput: {} requests per second'.format(round(args.count/s1, 2))
     for k, v in sorted(agg.items()):

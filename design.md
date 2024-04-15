@@ -1,16 +1,14 @@
-# ReJSON Module Design
+# ValkeyJSON Module Design
 
 ## Abstract
 
-The purpose of this module is to provide native support for JSON documents stored in Redis, allowing
-users to:
+The purpose of this module is to provide native support for JSON documents stored in Valkey, allowing users to:
 
 1. Store a JSON blob
-2. Manipulate just a part of the json object without retrieving it to the client
+2. Manipulate just a part of the JSON object without retrieving it to the client
 3. Retrieve just a portion of the object as JSON
 
-Later on, we can use the inernal object implementation in this module to produce similar modules for
-other serialization formats, namely XML and BSON.
+Later on, we can use the internal object implementation in this module to produce similar modules for other serialization formats, namely XML and BSON.
 
 ## Design Considerations
 
@@ -19,11 +17,11 @@ other serialization formats, namely XML and BSON.
 * The internal representation will initially be limited to the types supported by JSON, but can later be extended to types like timestamps, etc.
 * Queries that include internal paths of objects will be expressed in JSON path expressionse (e.g. `foo.bar[3].baz`)
 * We will not implement our own JSON parser and composer, but use existing libraries.
-* The code apart from the implementation of the redis commands will not depend on redis and will be testable without being compiled as a module.
+* The code apart from the implementation of the Valkey commands will not depend on Valkey and will be testable without being compiled as a module.
 
 ## Object Data Type
 
-The internal representation of JSON objects will be stored in a redis data type called Object [TBD].
+The internal representation of JSON objects will be stored in a Valkey data type called Node.
 
 These will be optimized for memory efficiency and path search speed. 
 
@@ -31,7 +29,7 @@ See [src/object.h](src/object.h) for the API specification.
 
 ## QueryPath 
 
-When updating, reading and deleting parts of json objects, we'll use path specifiers. 
+When updating, reading and deleting parts of JSON objects, we'll use path specifiers. 
 
 These too will have internal representation disconnected from their JSON path representation. 
 
@@ -39,7 +37,7 @@ These too will have internal representation disconnected from their JSON path re
 
 We only support a limited subset of it. Furthermore, jsonsl's jpr implementation may be worth looking into.
 
-| JSONPath         | rejson      | Description |
+| JSONPath         | ValkeyJSON  | Description |
 | ---------------- | ----------- | ----------------------------------------------------------------- |
 | `$`              | key name    | the root element                                                  |
 | `*`              | N/A #1      | wildcard, can be used instead of name or index                    |
@@ -59,6 +57,3 @@ ref: http://goessner.net/articles/JsonPath/
 1.  Union and slice operators should be added to ARR*, GET, MGET, DEL...
 1.  Filtering and scripting (min,max,...) should wait until some indexing is supported
 
-## Connecting a JSON parser / writer
-
-## Conneting Other Parsers 

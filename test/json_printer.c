@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
         printf("usage: %s filename\n", argv[0]);
         exit(1);
     }
-    RMUtil_InitAlloc();
+    VKMUtil_InitAlloc();
 
     FILE *f;
     long len;
