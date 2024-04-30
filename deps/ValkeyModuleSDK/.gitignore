@@ -1,0 +1,10 @@
+*.o
+*.a
+*.so
+*.db
+.vscode
+vkmutil/test_cmdparse
+vkmutil/test_heap
+vkmutil/test_periodic
+vkmutil/test_priority_queue
+vkmutil/test_vector
