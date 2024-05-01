@@ -11,7 +11,7 @@ extra:
   logo: 'images/logo.svg'
   social:
     - type: 'github'
-      link: 'https://github.com/goodform/valkey-json'
+      link: 'https://goodformcode.com/valkey-json'
 
 markdown_extensions:
   - codehilite
