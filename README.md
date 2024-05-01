@@ -9,14 +9,9 @@ Primary features:
 * Documents are stored as binary data in a tree structure, allowing fast access to sub-elements
 * Typed atomic operations for all JSON values types
 
-## Quickstart
-
-1.  [Launch ValkeyJSON with Docker](https://valkey-io.github.io/valkey-json/#launch-valkeyjson-with-docker)
-2.  [Use ValkeyJSON from a Valkey client](https://valkey-io/valkey-json/#using-valkeyjson)
-
 ## Documentation
 
-Read the docs at https://valkey-io.github.io/valkey-json
+Read the docs at https://goodformcode.com/valkey-json
 
 ## Current limitations and known issues
 

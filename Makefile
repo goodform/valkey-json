@@ -8,14 +8,14 @@ test:
 docker:
 	docker pull ubuntu:latest
 	docker pull ubuntu:xenial
-	docker build . -t valkey-io/valkey-json:latest
+	docker build . -t goodform/valkey-json:latest
 .PHONY: docker
 
 docker_dist:
-	docker build --rm -f Dockerfile . -t valkey-io/valkey-json
+	docker build --rm -f Dockerfile . -t goodform/valkey-json
 
 docker_push: docker_dist
-	docker push valkey-io/valkey-json:latest
+	docker push gooform/valkey-json:latest
 
 package:
 	$(MAKE) -C ./src package
